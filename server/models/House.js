@@ -10,7 +10,8 @@ const houseSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    length: 6
+    minlength: 6,
+    maxlength: 6
   },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
