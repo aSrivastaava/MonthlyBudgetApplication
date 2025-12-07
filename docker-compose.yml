@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: monthlybudget_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=monthlybudget
+
+  backend:
+    build: .
+    container_name: monthlybudget_backend
+    restart: always
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/monthlybudget
+      - JWT_SECRET=your_jwt_secret_key_here
+      - PORT=5000
+
+volumes:
+  mongodb_data:

@@ -23,9 +23,37 @@ A web application for managing shared household budgets. Users can create accoun
 ## Prerequisites
 
 - Node.js (v14 or higher)
-- MongoDB (v4.4 or higher)
+- MongoDB (v4.4 or higher) OR Docker
 
 ## Installation
+
+### Option 1: Using Docker (Recommended)
+
+This is the easiest way to run the application with all dependencies:
+
+```bash
+# Clone the repository
+git clone https://github.com/aSrivastaava/MonthlyBudgetApplication.git
+cd MonthlyBudgetApplication
+
+# Start MongoDB using Docker
+docker run -d -p 27017:27017 --name mongodb mongo:latest
+
+# Install dependencies
+npm install
+cd client && npm install && cd ..
+
+# Create .env file
+cp .env.example .env
+
+# Start the backend
+npm run dev
+
+# In a new terminal, start the frontend
+npm run client
+```
+
+### Option 2: Local MongoDB Installation
 
 ### 1. Clone the repository
 

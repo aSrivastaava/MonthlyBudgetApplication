@@ -12,11 +12,10 @@ function HouseDetails() {
   const [success, setSuccess] = useState('');
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [newName, setNewName] = useState('');
-  const [selectedMember, setSelectedMember] = useState(null);
-  const [selectedRole, setSelectedRole] = useState('');
 
   useEffect(() => {
     fetchHouseDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [houseId]);
 
   const fetchHouseDetails = async () => {
