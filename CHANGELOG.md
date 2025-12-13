@@ -74,6 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Maximum file size: 5MB
   - Allowed file types: JPEG, PNG, PDF
 - **Role-Based Access Control**: Enhanced permission checks for budget and rent management features
+- **Input Validation**: Added comprehensive validation for JSON inputs to prevent injection attacks
+- **Directory Safety**: Automatic creation of upload directories to prevent runtime errors
+- **Division by Zero Protection**: Added guard clauses to prevent crashes
+- **Null/Undefined Handling**: Proper validation of optional and potentially null data
+- **Path Security**: Using path.join to prevent path traversal attacks
 
 ## Technical Details
 
@@ -92,12 +97,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## Security Considerations
+
+### Known Issues
+- **Rate Limiting**: Not implemented. See SECURITY_SUMMARY.md for recommendations.
+
+### Recommendations for Production
+- Implement rate limiting on all API endpoints
+- Enable HTTPS/TLS
+- Use environment-specific CORS configuration
+- Enable MongoDB authentication
+- Implement comprehensive logging and monitoring
+- Regular security audits and dependency updates
+
 ## Future Enhancements
 
 Potential features for future releases:
-- Pie chart visualization for rent contributions
-- Frontend components for all new features
+- Rate limiting middleware implementation
 - Payment notifications and reminders
 - Export budget reports to PDF/Excel
 - Recurring payment tracking
 - Mobile app support
+- Advanced analytics and reporting
+- Multi-currency support
+- Receipt OCR for automatic data extraction
