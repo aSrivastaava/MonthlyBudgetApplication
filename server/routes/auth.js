@@ -5,6 +5,11 @@ const auth = require('../middleware/auth');
 
 const router = express.Router();
 
+// Utility function to escape special regex characters
+const escapeRegex = (str) => {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 // Register new user
 router.post('/register', async (req, res) => {
   try {
@@ -15,8 +20,11 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
     
+    // Normalize username to lowercase for consistency
+    const normalizedUsername = username.toLowerCase();
+    
     // Check if user already exists (case-insensitive check for username)
-    const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedUsername = escapeRegex(normalizedUsername);
     const existingUser = await User.findOne({ 
       $or: [
         { email }, 
@@ -27,9 +35,9 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'User with this email or username already exists' });
     }
     
-    // Create new user
+    // Create new user with normalized username
     const user = new User({
-      username,
+      username: normalizedUsername,
       email,
       password
     });
@@ -67,11 +75,11 @@ router.post('/login', async (req, res) => {
     }
     
     // Find user by email or username (case-insensitive)
-    // Escape special regex characters for safe username matching
-    const escapedInput = emailOrUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const normalizedInput = emailOrUsername.toLowerCase();
+    const escapedInput = escapeRegex(normalizedInput);
     const user = await User.findOne({ 
       $or: [
-        { email: emailOrUsername.toLowerCase() }, 
+        { email: normalizedInput }, 
         { username: { $regex: new RegExp(`^${escapedInput}$`, 'i') } }
       ] 
     });
