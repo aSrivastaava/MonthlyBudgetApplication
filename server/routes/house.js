@@ -180,6 +180,11 @@ router.put('/:houseId/rename', auth, async (req, res) => {
       return res.status(403).json({ message: 'You are not a member of this house' });
     }
     
+    // Check if user is owner or admin
+    if (userMembership.role !== 'owner' && userMembership.role !== 'admin') {
+      return res.status(403).json({ message: 'Only owners and admins can rename the house' });
+    }
+    
     // Update house name
     house.name = name;
     await house.save();

@@ -66,6 +66,7 @@ function HouseDetails() {
   };
 
   const canManageRoles = house && (house.userRole === 'owner' || house.userRole === 'admin');
+  const canRenameHouse = house && (house.userRole === 'owner' || house.userRole === 'admin');
 
   if (loading) {
     return <div className="loading">Loading...</div>;
@@ -90,15 +91,26 @@ function HouseDetails() {
         </button>
         <div className="house-title">
           <h1>{house.name}</h1>
-          <button onClick={() => setShowRenameModal(true)} className="btn-secondary">
-            Rename
-          </button>
+          {canRenameHouse && (
+            <button onClick={() => setShowRenameModal(true)} className="btn-secondary">
+              Rename
+            </button>
+          )}
         </div>
       </header>
 
       <div className="house-content">
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
+
+        <div className="budget-link-section">
+          <button 
+            onClick={() => navigate(`/house/${houseId}/budget`)} 
+            className="btn-budget"
+          >
+            📊 Manage Budget & Payments
+          </button>
+        </div>
 
         <div className="house-info-section">
           <div className="info-card">

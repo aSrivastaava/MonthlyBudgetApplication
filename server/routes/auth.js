@@ -53,15 +53,17 @@ router.post('/register', async (req, res) => {
 // Login user
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { emailOrUsername, password } = req.body;
     
     // Validate input
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Please provide email and password' });
+    if (!emailOrUsername || !password) {
+      return res.status(400).json({ message: 'Please provide email/username and password' });
     }
     
-    // Find user
-    const user = await User.findOne({ email });
+    // Find user by email or username
+    const user = await User.findOne({ 
+      $or: [{ email: emailOrUsername.toLowerCase() }, { username: emailOrUsername }] 
+    });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }

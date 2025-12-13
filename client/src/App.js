@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import HouseDetails from './pages/HouseDetails';
+import BudgetManagement from './pages/BudgetManagement';
 import './App.css';
 
 const PrivateRoute = ({ children }) => {
@@ -62,6 +63,14 @@ function App() {
             element={
               <PrivateRoute>
                 <HouseDetails />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/house/:houseId/budget" 
+            element={
+              <PrivateRoute>
+                <BudgetManagement />
               </PrivateRoute>
             } 
           />
