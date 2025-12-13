@@ -15,8 +15,14 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
     
-    // Check if user already exists
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    // Check if user already exists (case-insensitive check for username)
+    const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existingUser = await User.findOne({ 
+      $or: [
+        { email }, 
+        { username: { $regex: new RegExp(`^${escapedUsername}$`, 'i') } }
+      ] 
+    });
     if (existingUser) {
       return res.status(400).json({ message: 'User with this email or username already exists' });
     }
@@ -60,9 +66,14 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Please provide email/username and password' });
     }
     
-    // Find user by email or username
+    // Find user by email or username (case-insensitive)
+    // Escape special regex characters for safe username matching
+    const escapedInput = emailOrUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const user = await User.findOne({ 
-      $or: [{ email: emailOrUsername.toLowerCase() }, { username: emailOrUsername }] 
+      $or: [
+        { email: emailOrUsername.toLowerCase() }, 
+        { username: { $regex: new RegExp(`^${escapedInput}$`, 'i') } }
+      ] 
     });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
