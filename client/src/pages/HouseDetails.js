@@ -103,6 +103,15 @@ function HouseDetails() {
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
 
+        <div className="budget-link-section">
+          <button 
+            onClick={() => navigate(`/house/${houseId}/budget`)} 
+            className="btn-budget"
+          >
+            📊 Manage Budget & Payments
+          </button>
+        </div>
+
         <div className="house-info-section">
           <div className="info-card">
             <h3>House Key</h3>

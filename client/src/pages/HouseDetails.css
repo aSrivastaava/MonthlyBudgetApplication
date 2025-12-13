@@ -42,6 +42,29 @@
   margin: 0 auto;
 }
 
+.budget-link-section {
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.btn-budget {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: 0 4px 6px rgba(76, 175, 80, 0.3);
+  transition: all 0.3s;
+}
+
+.btn-budget:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(76, 175, 80, 0.4);
+}
+
 .house-info-section {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
