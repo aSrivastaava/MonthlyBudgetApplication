@@ -4,14 +4,46 @@ A web application for managing shared household budgets. Users can create accoun
 
 ## Features
 
-- **User Authentication**: Register and login with secure JWT authentication
-- **House Management**: Create shared spaces called "Houses"
+### User Authentication
+- **Flexible Login**: Register and login with secure JWT authentication using email or username
+- **Role-Based Access**: Different features available based on user roles
+
+### House Management
+- **Create Houses**: Create shared spaces called "Houses"
 - **Unique House Keys**: Each house gets a unique 6-digit alphanumeric key for invitations
 - **Join Houses**: Users can join existing houses using the house key
 - **Role Management**: House owners and admins can assign roles to members
-- **Roles**: Owner, Admin, Financier, Rent Payer, Member
-- **House Renaming**: Members can rename their houses
+- **Restricted Renaming**: Only admins and owners can rename houses
 - **Member Management**: View all house members and their roles
+
+### Budget & Financial Management
+- **Monthly Budgets**: Financiers can create and manage monthly budgets with categories:
+  - Groceries
+  - Wi-Fi
+  - Gas
+  - Electricity
+  - Other custom categories
+- **Payment Tracking**: Record payments with:
+  - Receipt uploads (JPEG, PNG, PDF)
+  - Individual member contributions
+  - Payment descriptions and dates
+  - Category-wise organization
+- **Rent Management**: Rent payers can:
+  - Upload rent receipts
+  - Track individual member rent contributions
+  - View contribution breakdowns with pie charts
+- **Budget Statistics**: Comprehensive analytics including:
+  - Total budgeted vs. spent
+  - Category-wise spending breakdown
+  - Member contribution tracking
+  - Balance calculations (over/under payments)
+
+### Roles & Permissions
+- **Owner**: Full control, can assign any role, cannot be changed
+- **Admin**: Can assign roles, rename house, manage budgets and rent
+- **Financier**: Can create budgets and record payments
+- **Rent Payer**: Can record rent payments
+- **Member**: Basic access to house information
 
 ## Tech Stack
 
@@ -144,7 +176,7 @@ npm start
 ### Authentication
 
 - `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login user
+- `POST /api/auth/login` - Login user (email or username)
 - `GET /api/auth/me` - Get current user
 
 ### Houses
@@ -153,27 +185,63 @@ npm start
 - `POST /api/houses/join` - Join a house using house key
 - `GET /api/houses/my-houses` - Get user's houses
 - `GET /api/houses/:houseId` - Get house details
-- `PUT /api/houses/:houseId/rename` - Rename a house
-- `PUT /api/houses/:houseId/assign-role` - Assign role to member (admin only)
+- `PUT /api/houses/:houseId/rename` - Rename a house (admin/owner only)
+- `PUT /api/houses/:houseId/assign-role` - Assign role to member (admin/owner only)
+
+### Budget Management
+
+- `POST /api/houses/:houseId/budget` - Create or update monthly budget (financier/admin/owner)
+- `GET /api/houses/:houseId/budget/:year/:month` - Get budget for specific month
+- `GET /api/houses/:houseId/budgets` - Get all budgets for a house
+
+### Payment Management
+
+- `POST /api/houses/:houseId/payment` - Create payment record with receipt (financier/admin/owner)
+- `GET /api/houses/:houseId/payments/:budgetId` - Get payments for a budget
+- `GET /api/houses/:houseId/payments` - Get all payments for a house
+
+### Rent Management
+
+- `POST /api/houses/:houseId/rent` - Create or update rent payment (rent payer/admin/owner)
+- `GET /api/houses/:houseId/rent/:year/:month` - Get rent payment for specific month
+- `GET /api/houses/:houseId/rent` - Get all rent payments for a house
+
+### Statistics
+
+- `GET /api/houses/:houseId/statistics/:year/:month` - Get budget statistics with member contributions
 
 ## Usage
 
+### Getting Started
 1. **Register**: Create a new account with username, email, and password
-2. **Login**: Sign in with your credentials
+2. **Login**: Sign in with your email or username
 3. **Create House**: Click "Create House" and provide a name
 4. **Get House Key**: After creating, you'll receive a unique 6-digit alphanumeric key
 5. **Share Key**: Share the house key with others to invite them
 6. **Join House**: Use "Join House" and enter the 6-digit key
+
+### House Management
 7. **Manage Roles**: As owner/admin, click on a house to manage member roles
-8. **Rename House**: Click "Rename" to change your house name
+8. **Rename House**: As owner/admin, click "Rename" to change your house name
 
-## Roles & Permissions
+### Budget Management
+9. **Access Budget**: Click "📊 Manage Budget & Payments" from house details
+10. **Create Budget**: As financier/admin/owner, create monthly budget with categories
+11. **Add Payments**: Record payments with receipts and member contributions
+12. **Record Rent**: As rent payer/admin/owner, upload rent receipts and contributions
+13. **View Statistics**: Check spending analytics and member contribution balances
 
-- **Owner**: Full control, can assign any role, cannot be changed
-- **Admin**: Can assign roles to members (except owner)
-- **Financier**: Standard member with financial responsibility designation
-- **Rent Payer**: Standard member with rent payment responsibility designation
-- **Member**: Basic access to the house
+## Detailed Permissions
+
+| Feature | Owner | Admin | Financier | Rent Payer | Member |
+|---------|-------|-------|-----------|------------|--------|
+| View house details | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Rename house | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Assign roles | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Create/edit budget | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Add payments | ✓ | ✓ | ✓ | ✗ | ✗ |
+| Record rent | ✓ | ✓ | ✗ | ✓ | ✗ |
+| View statistics | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ## Project Structure
 
