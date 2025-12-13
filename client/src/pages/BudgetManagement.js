@@ -304,7 +304,7 @@ function BudgetManagement() {
                 <h3>Rent Payment Details</h3>
                 <p className="rent-amount">Total: ${rentPayment.totalAmount}</p>
                 {rentPayment.receiptUrl && (
-                  <a href={`http://localhost:5000${rentPayment.receiptUrl}`} target="_blank" rel="noopener noreferrer">
+                  <a href={rentPayment.receiptUrl} target="_blank" rel="noopener noreferrer">
                     View Receipt
                   </a>
                 )}

@@ -1,16 +1,21 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs-extra');
 const RentPayment = require('../models/RentPayment');
 const House = require('../models/House');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
 
+// Ensure upload directory exists
+const uploadDir = path.join(__dirname, '../../uploads/rent-receipts');
+fs.ensureDirSync(uploadDir);
+
 // Configure multer for file upload
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/rent-receipts/');
+    cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -63,8 +68,14 @@ router.post('/:houseId/rent', auth, upload.single('receipt'), async (req, res) =
     // Parse contributions if provided
     let parsedContributions = [];
     if (contributions) {
+      if (typeof contributions !== 'string') {
+        return res.status(400).json({ message: 'Contributions must be a JSON string' });
+      }
       try {
         parsedContributions = JSON.parse(contributions);
+        if (!Array.isArray(parsedContributions)) {
+          return res.status(400).json({ message: 'Contributions must be an array' });
+        }
       } catch (e) {
         return res.status(400).json({ message: 'Invalid contributions format' });
       }

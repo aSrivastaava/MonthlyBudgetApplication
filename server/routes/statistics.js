@@ -76,6 +76,9 @@ router.get('/:houseId/statistics/:year/:month', auth, async (req, res) => {
     
     payments.forEach(payment => {
       payment.contributions.forEach(contrib => {
+        if (!contrib.userId) {
+          return; // Skip if userId is not populated
+        }
         const userId = contrib.userId._id ? contrib.userId._id.toString() : contrib.userId.toString();
         if (memberContributions[userId]) {
           memberContributions[userId].totalContributed += contrib.amount;
@@ -89,6 +92,9 @@ router.get('/:houseId/statistics/:year/:month', auth, async (req, res) => {
     
     // Calculate how much each member should have contributed
     const memberCount = house.members.length;
+    if (memberCount === 0) {
+      return res.status(400).json({ message: 'House has no members' });
+    }
     const expectedContributionPerMember = totalSpent / memberCount;
     
     Object.keys(memberContributions).forEach(userId => {
