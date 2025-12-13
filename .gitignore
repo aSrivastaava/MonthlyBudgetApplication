@@ -7,3 +7,4 @@ build/
 coverage/
 client/build/
 client/node_modules/
+uploads/
