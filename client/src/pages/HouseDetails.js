@@ -66,6 +66,7 @@ function HouseDetails() {
   };
 
   const canManageRoles = house && (house.userRole === 'owner' || house.userRole === 'admin');
+  const canRenameHouse = house && (house.userRole === 'owner' || house.userRole === 'admin');
 
   if (loading) {
     return <div className="loading">Loading...</div>;
@@ -90,9 +91,11 @@ function HouseDetails() {
         </button>
         <div className="house-title">
           <h1>{house.name}</h1>
-          <button onClick={() => setShowRenameModal(true)} className="btn-secondary">
-            Rename
-          </button>
+          {canRenameHouse && (
+            <button onClick={() => setShowRenameModal(true)} className="btn-secondary">
+              Rename
+            </button>
+          )}
         </div>
       </header>
 
