@@ -166,4 +166,36 @@ router.get('/:houseId/payments', auth, async (req, res) => {
   }
 });
 
+// Delete a payment (financier/admin/owner only)
+router.delete('/:houseId/payments/:paymentId', auth, async (req, res) => {
+  try {
+    const { houseId, paymentId } = req.params;
+
+    const house = await House.findById(houseId);
+    if (!house) return res.status(404).json({ message: 'House not found' });
+
+    const userMembership = house.members.find(m => m.userId.toString() === req.userId.toString());
+    if (!userMembership) return res.status(403).json({ message: 'Not a member' });
+
+    if (!['owner', 'admin', 'financier'].includes(userMembership.role)) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+
+    const payment = await Payment.findOne({ _id: paymentId, houseId });
+    if (!payment) return res.status(404).json({ message: 'Payment not found' });
+
+    // Delete receipt file if exists
+    if (payment.receiptUrl) {
+      const filePath = path.join(__dirname, '../../', payment.receiptUrl);
+      fs.remove(filePath).catch(() => {});
+    }
+
+    await Payment.deleteOne({ _id: paymentId });
+    res.json({ message: 'Payment deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

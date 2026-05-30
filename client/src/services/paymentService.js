@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api/houses';
+const API_URL = '/api/houses';
 
 export const paymentService = {
   async createPayment(houseId, paymentData) {

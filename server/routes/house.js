@@ -261,4 +261,80 @@ router.put('/:houseId/assign-role', auth, async (req, res) => {
   }
 });
 
+// Leave a house (non-owners only)
+router.post('/:houseId/leave', auth, async (req, res) => {
+  try {
+    const house = await House.findById(req.params.houseId);
+    if (!house) return res.status(404).json({ message: 'House not found' });
+
+    const userMembership = house.members.find(m => m.userId.toString() === req.userId.toString());
+    if (!userMembership) return res.status(400).json({ message: 'Not a member' });
+    if (userMembership.role === 'owner') {
+      return res.status(400).json({ message: 'Owner cannot leave. Transfer ownership or delete the house.' });
+    }
+
+    house.members = house.members.filter(m => m.userId.toString() !== req.userId.toString());
+    await house.save();
+
+    await User.updateOne({ _id: req.userId }, { $pull: { houses: { houseId: house._id } } });
+
+    res.json({ message: 'Left house successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete a house (owner only)
+router.delete('/:houseId', auth, async (req, res) => {
+  try {
+    const house = await House.findById(req.params.houseId);
+    if (!house) return res.status(404).json({ message: 'House not found' });
+
+    if (house.owner.toString() !== req.userId.toString()) {
+      return res.status(403).json({ message: 'Only the owner can delete this house' });
+    }
+
+    // Remove house from all members
+    const memberIds = house.members.map(m => m.userId);
+    await User.updateMany(
+      { _id: { $in: memberIds } },
+      { $pull: { houses: { houseId: house._id } } }
+    );
+
+    await House.deleteOne({ _id: house._id });
+    res.json({ message: 'House deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Remove a member (owner/admin only)
+router.delete('/:houseId/members/:memberId', auth, async (req, res) => {
+  try {
+    const { houseId, memberId } = req.params;
+    const house = await House.findById(houseId);
+    if (!house) return res.status(404).json({ message: 'House not found' });
+
+    const userMembership = house.members.find(m => m.userId.toString() === req.userId.toString());
+    if (!userMembership || !['owner', 'admin'].includes(userMembership.role)) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+
+    const targetMember = house.members.find(m => m.userId.toString() === memberId);
+    if (!targetMember) return res.status(404).json({ message: 'Member not found' });
+    if (targetMember.role === 'owner') return res.status(400).json({ message: 'Cannot remove owner' });
+
+    house.members = house.members.filter(m => m.userId.toString() !== memberId);
+    await house.save();
+    await User.updateOne({ _id: memberId }, { $pull: { houses: { houseId: house._id } } });
+
+    res.json({ message: 'Member removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api/houses';
+const API_BASE_URL = '/api/houses';
 
 export const houseService = {
   createHouse: async (name) => {
@@ -65,16 +65,37 @@ export const houseService = {
 
   assignRole: async (houseId, memberId, role) => {
     try {
-      const response = await axios.put(`${API_BASE_URL}/${houseId}/assign-role`, {
-        memberId,
-        role
-      });
+      const response = await axios.put(`${API_BASE_URL}/${houseId}/assign-role`, { memberId, role });
       return { success: true, data: response.data };
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to assign role'
-      };
+      return { success: false, error: error.response?.data?.message || 'Failed to assign role' };
     }
-  }
+  },
+
+  leaveHouse: async (houseId) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/${houseId}/leave`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.message || 'Failed to leave house' };
+    }
+  },
+
+  deleteHouse: async (houseId) => {
+    try {
+      const response = await axios.delete(`${API_BASE_URL}/${houseId}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.message || 'Failed to delete house' };
+    }
+  },
+
+  removeMember: async (houseId, memberId) => {
+    try {
+      const response = await axios.delete(`${API_BASE_URL}/${houseId}/members/${memberId}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.message || 'Failed to remove member' };
+    }
+  },
 };
