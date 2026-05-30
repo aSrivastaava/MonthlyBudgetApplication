@@ -21,7 +21,7 @@ export default function AppLayout({ children }) {
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">💰</div>
-          <span className="sidebar-logo-text">BudgetHome</span>
+          <span className="sidebar-logo-text">SplitNest</span>
         </div>
 
         <nav className="sidebar-nav">

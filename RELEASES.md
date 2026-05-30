@@ -49,7 +49,7 @@ Complete application overhaul — new Expense Book feature, full dark UI redesig
 
 ## v1.0.0 — Initial Release
 
-Original MonthlyBudgetApplication.
+Original SplitNest.
 
 ### Features
 

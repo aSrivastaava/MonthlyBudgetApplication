@@ -42,7 +42,7 @@ export default function BudgetManagement() {
   const [budgetCats, setBudgetCats] = useState(CATEGORIES.map(n => ({ name: n, amount: 0 })));
 
   // Payment form
-  const [payForm, setPayForm] = useState({ category: 'groceries', amount: '', description: '', receipt: null });
+  const [payForm, setPayForm] = useState({ category: '', amount: '', description: '', receipt: null });
   const [payContribs, setPayContribs] = useState([]);
 
   // Rent form
@@ -112,7 +112,7 @@ export default function BudgetManagement() {
     if (result.success) {
       toast('Payment added!');
       setShowPaymentModal(false);
-      setPayForm({ category: 'groceries', amount: '', description: '', receipt: null });
+      setPayForm({ category: budget.categories[0]?.name || '', amount: '', description: '', receipt: null });
       setPayContribs(prev => prev.map(c => ({ ...c, amount: 0 })));
       fetchAll();
     } else toast(result.error, true);
@@ -207,7 +207,7 @@ export default function BudgetManagement() {
                     {canManageBudget && (
                       <div style={{ display: 'flex', gap: 10 }}>
                         <button className="btn btn-secondary btn-sm" onClick={() => setShowBudgetModal(true)}>Edit Budget</button>
-                        <button className="btn btn-primary btn-sm" onClick={() => setShowPaymentModal(true)}>+ Add Payment</button>
+                        <button className="btn btn-primary btn-sm" onClick={() => { setPayForm(f => ({ ...f, category: budget.categories[0]?.name || 'groceries' })); setShowPaymentModal(true); }}>+ Add Payment</button>
                       </div>
                     )}
                   </div>
