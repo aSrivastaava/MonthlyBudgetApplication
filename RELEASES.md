@@ -1,5 +1,19 @@
 # Release Notes
 
+## v3.0.0 — May 30, 2026
+
+- Balance tracking (Splitwise-style) — who owes whom with debt simplification algorithm
+- Settle up — record payments between members; adjusts net balances automatically
+- Activity feed in house overview with payments, rent, and settlements
+- New Balance page at `/house/:id/balances` with summary, all balances, and settlement history
+- Member net balance shown prominently in house details header
+- Member avatars with color-coded initials throughout the UI
+- Full UI redesign — emerald green as primary brand color
+- Split-panel login and register pages with feature highlights
+- Context-aware sidebar showing house navigation links
+- Skeleton loading states, password strength indicator, better modals and empty states
+- Backend: Settlement model, GET /balances, POST /settle, GET /activity routes
+
 ## v2.1.0 — May 30, 2026
 
 - Renamed project to SplitNest

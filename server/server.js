@@ -11,6 +11,7 @@ const paymentRoutes = require('./routes/payment');
 const rentRoutes = require('./routes/rent');
 const statisticsRoutes = require('./routes/statistics');
 const bookRoutes = require('./routes/book');
+const settlementRoutes = require('./routes/settlement');
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.use('/api/houses', paymentRoutes);
 app.use('/api/houses', rentRoutes);
 app.use('/api/houses', statisticsRoutes);
 app.use('/api/houses', bookRoutes);
+app.use('/api/houses', settlementRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

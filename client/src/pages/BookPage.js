@@ -8,7 +8,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const CAT_ICONS = { groceries:'🛒', wifi:'📶', gas:'⛽', electricity:'⚡', other:'📦', rent:'🏠' };
 const ALL_CATS = ['groceries','wifi','gas','electricity','other','rent'];
 
-function fmt(n) { return `$${Number(n).toFixed(2)}`; }
+function fmt(n) { return '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 export default function BookPage() {
   const { houseId } = useParams();

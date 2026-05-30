@@ -4,12 +4,13 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Register() {
   const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '' });
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,52 +19,114 @@ export default function Register() {
     if (form.password.length < 6) return setError('Password must be at least 6 characters');
     setLoading(true);
     const result = await register(form.username, form.email, form.password);
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.error);
-    }
+    if (result.success) navigate('/dashboard');
+    else setError(result.error);
     setLoading(false);
   };
 
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 16 }}>
-      <div style={{ width: '100%', maxWidth: 420 }}>
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ width: 56, height: 56, background: 'var(--primary)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 16px' }}>💰</div>
-          <h1 style={{ fontSize: 26, marginBottom: 6 }}>Create Account</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Join SplitNest today</p>
-        </div>
+  const strength = (() => {
+    const p = form.password;
+    if (!p) return 0;
+    let s = 0;
+    if (p.length >= 8) s++;
+    if (/[A-Z]/.test(p)) s++;
+    if (/[0-9]/.test(p)) s++;
+    if (/[^A-Za-z0-9]/.test(p)) s++;
+    return s;
+  })();
+  const strengthColors = ['', '#ef4444', '#f59e0b', '#10b981', '#10b981'];
+  const strengthLabels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
 
-        <div className="card" style={{ padding: 32 }}>
+  return (
+    <div className="auth-layout">
+      <div className="auth-brand">
+        <div className="auth-brand-content">
+          <div className="auth-brand-logo">
+            <img src="/logo192.png" alt="SplitNest" />
+          </div>
+          <h1>Join SplitNest</h1>
+          <p className="auth-brand-slogan">Split bills. Not friendships.</p>
+          <div className="auth-feature">
+            <div className="auth-feature-icon">🆓</div>
+            Free to use — no hidden costs
+          </div>
+          <div className="auth-feature">
+            <div className="auth-feature-icon">🔑</div>
+            Create or join a shared house instantly
+          </div>
+          <div className="auth-feature">
+            <div className="auth-feature-icon">📊</div>
+            Real-time balance tracking & charts
+          </div>
+          <div className="auth-feature">
+            <div className="auth-feature-icon">🤝</div>
+            Settle up with one click
+          </div>
+        </div>
+      </div>
+
+      <div className="auth-form-panel">
+        <div className="auth-form-inner">
+          <div className="auth-form-header">
+            <h2>Create account</h2>
+            <p>Start splitting expenses with your housemates</p>
+          </div>
+
           {error && <div className="alert alert-error">{error}</div>}
+
           <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Username</label>
-              <input type="text" value={form.username} onChange={set('username')} required placeholder="johndoe" minLength={3} autoFocus />
-            </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input type="email" value={form.email} onChange={set('email')} required placeholder="you@email.com" />
+            <div className="form-row">
+              <div className="form-group">
+                <label>Username</label>
+                <input type="text" value={form.username} onChange={set('username')} required placeholder="johndoe" minLength={3} autoFocus />
+              </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input type="email" value={form.email} onChange={set('email')} required placeholder="you@email.com" />
+              </div>
             </div>
             <div className="form-group">
               <label>Password</label>
-              <input type="password" value={form.password} onChange={set('password')} required placeholder="Min 6 characters" minLength={6} />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={set('password')}
+                  required placeholder="Min 6 characters" minLength={6}
+                  style={{ paddingRight: 44 }}
+                />
+                <button type="button" onClick={() => setShowPw(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16 }}>
+                  {showPw ? '🙈' : '👁️'}
+                </button>
+              </div>
+              {form.password && (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                    {[1,2,3,4].map(i => (
+                      <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: i <= strength ? strengthColors[strength] : 'var(--border)', transition: 'background 0.3s' }} />
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 11, color: strengthColors[strength] }}>{strengthLabels[strength]}</span>
+                </div>
+              )}
             </div>
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: 24 }}>
               <label>Confirm Password</label>
               <input type="password" value={form.confirm} onChange={set('confirm')} required placeholder="••••••••" />
+              {form.confirm && form.password !== form.confirm && (
+                <span className="form-hint" style={{ color: 'var(--danger)' }}>Passwords don't match</span>
+              )}
             </div>
-            <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}>
-              {loading ? 'Creating account…' : 'Create Account'}
+            <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
+              {loading ? <><span className="spinner spinner-sm" /> Creating account…</> : 'Create Account'}
             </button>
           </form>
-        </div>
 
-        <p style={{ textAlign: 'center', marginTop: 20, fontSize: 14, color: 'var(--text-muted)' }}>
-          Already have an account?{' '}
-          <Link to="/login" style={{ color: 'var(--primary-light)', fontWeight: 600 }}>Sign in</Link>
-        </p>
+          <p style={{ textAlign: 'center', marginTop: 24, fontSize: 14, color: 'var(--text-muted)' }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: 'var(--primary-light)', fontWeight: 600 }}>Sign in</Link>
+          </p>
+        </div>
       </div>
     </div>
   );
