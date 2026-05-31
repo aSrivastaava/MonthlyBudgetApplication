@@ -2,377 +2,233 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import AppLayout from '../components/AppLayout';
+import AppLayout, { avColor, avInit, fmtINR } from '../components/AppLayout';
+import { ChevronLeft, Scale, Users, CheckCircle, Clock, Plus } from 'lucide-react';
 
-function avatarClass(name) {
-  if (!name) return 'av-a';
-  return 'av-' + name[0].toLowerCase().replace(/[^a-z]/, 'a');
-}
-function initials(name) { return name ? name[0].toUpperCase() : '?'; }
-function fmt(n) {
-  return '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+const X = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 
 export default function BalancePage() {
   const { houseId } = useParams();
-  const navigate = useNavigate();
+  const nav = useNavigate();
   const { user } = useAuth();
-
-  const [balances, setBalances] = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [tab, setTab] = useState('debts');
+  const [toast, setToast] = useState({ msg: '', type: 'ok' });
   const [showSettle, setShowSettle] = useState(false);
-  const [settleForm, setSettleForm] = useState({ paidTo: '', amount: '', note: '' });
-  const [settling, setSettling] = useState(false);
-  const [activeTab, setActiveTab] = useState('summary');
+  const [form, setForm] = useState({ paidTo: '', amount: '', note: '' });
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => { fetchBalances(); }, [houseId]);
+  useEffect(() => { load(); }, [houseId]);
 
-  const fetchBalances = async () => {
+  const load = async () => {
     setLoading(true);
-    try {
-      const res = await axios.get(`/api/houses/${houseId}/balances`);
-      setBalances(res.data);
-    } catch (e) {
-      setError(e.response?.data?.message || 'Failed to load balances');
-    }
+    try { const r = await axios.get(`/api/houses/${houseId}/balances`); setData(r.data); }
+    catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  const toast = (msg, isErr = false) => {
-    if (isErr) setError(msg); else setSuccess(msg);
-    setTimeout(() => { setError(''); setSuccess(''); }, 3500);
-  };
+  const showToast = (msg, type = 'ok') => { setToast({ msg, type }); setTimeout(() => setToast({ msg: '' }), 3000); };
 
-  const handleSettle = async (e) => {
-    e.preventDefault();
-    setSettling(true);
+  const settle = async e => {
+    e.preventDefault(); setBusy(true);
     try {
-      await axios.post(`/api/houses/${houseId}/settle`, {
-        paidTo: settleForm.paidTo,
-        amount: parseFloat(settleForm.amount),
-        note: settleForm.note
-      });
-      toast('Settlement recorded!');
-      setShowSettle(false);
-      setSettleForm({ paidTo: '', amount: '', note: '' });
-      fetchBalances();
-    } catch (e) {
-      toast(e.response?.data?.message || 'Failed to record settlement', true);
-    }
-    setSettling(false);
+      await axios.post(`/api/houses/${houseId}/settle`, { paidTo: form.paidTo, amount: parseFloat(form.amount), note: form.note });
+      showToast('Settlement recorded!');
+      setShowSettle(false); setForm({ paidTo: '', amount: '', note: '' }); load();
+    } catch (e) { showToast(e.response?.data?.message || 'Failed', 'err'); }
+    setBusy(false);
   };
 
-  const openSettleWith = (toUserId, amount) => {
-    setSettleForm({ paidTo: toUserId, amount: amount > 0 ? amount.toFixed(2) : '', note: '' });
-    setShowSettle(true);
-  };
+  const openFor = (toId, amount) => { setForm({ paidTo: toId, amount: amount > 0 ? amount.toFixed(2) : '', note: '' }); setShowSettle(true); };
 
-  if (loading) return (
-    <AppLayout>
-      <div className="page-inner">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 72, borderRadius: 14 }} />)}
-        </div>
-      </div>
-    </AppLayout>
-  );
+  if (loading) return <AppLayout><div className="page">{[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 68, borderRadius: 10, marginBottom: 10 }} />)}</div></AppLayout>;
 
-  const myId = user?.id;
-  const myBalance = balances?.netBalance?.[myId] ?? 0;
-  const others = balances?.members?.filter(m => m.id !== myId) || [];
-  const myDebts = balances?.debts?.filter(d => d.from.id === myId) || [];
-  const owedToMe = balances?.debts?.filter(d => d.to.id === myId) || [];
+  const myId = user?.id?.toString();
+  const myBal = data?.netBalance?.[myId] ?? 0;
+  const myDebts = data?.debts?.filter(d => d.from.id === myId) || [];
+  const owedToMe = data?.debts?.filter(d => d.to.id === myId) || [];
 
   return (
     <AppLayout>
-      <div className="page-inner" style={{ animation: 'slideUp 0.3s ease' }}>
-        <button className="page-back" onClick={() => navigate(`/house/${houseId}`)}>
-          ← Back to House
-        </button>
+      <div className="page enter">
+        <button className="back-btn" onClick={() => nav(`/house/${houseId}`)}><ChevronLeft size={14} /> House</button>
 
-        {error && <div className="alert alert-error">{error}</div>}
-        {success && <div className="alert alert-success">{success}</div>}
-
-        <div className="page-header">
-          <div>
-            <h1>⚖️ Balances</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 4 }}>
-              Track who owes whom and settle up easily
-            </p>
+        <div className="page-hd">
+          <div className="page-hd-left">
+            <h1>Balances</h1>
+            <p>Track shared expenses and settle debts</p>
           </div>
-          <div className="page-header-actions">
-            <button className="btn btn-primary" onClick={() => setShowSettle(true)}>
-              ✅ Record Settlement
-            </button>
+          <div className="page-hd-right">
+            <button className="btn btn-primary" onClick={() => setShowSettle(true)}><Plus size={14} /> Record Settlement</button>
           </div>
         </div>
 
-        {/* My Balance Hero */}
+        {/* Hero balance card */}
         <div style={{
-          background: myBalance > 0 ? 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.04))' :
-                      myBalance < 0 ? 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.04))' :
-                      'var(--card)',
-          border: myBalance > 0 ? '1px solid rgba(16,185,129,0.25)' : myBalance < 0 ? '1px solid rgba(239,68,68,0.2)' : '1px solid var(--border)',
-          borderRadius: 'var(--radius-xl)', padding: '28px 32px', marginBottom: 28,
-          display: 'flex', alignItems: 'center', gap: 24
+          borderRadius: 18, padding: '24px 28px', marginBottom: 20,
+          display: 'flex', alignItems: 'center', gap: 20,
+          background: myBal > 0.005 ? 'rgba(34,197,94,.07)' : myBal < -0.005 ? 'rgba(239,68,68,.07)' : 'var(--glass)',
+          border: `1px solid ${myBal > 0.005 ? 'rgba(34,197,94,.25)' : myBal < -0.005 ? 'rgba(239,68,68,.22)' : 'var(--stroke)'}`,
+          backdropFilter: 'blur(12px)',
         }}>
-          <div style={{ fontSize: 48 }}>
-            {myBalance > 0 ? '💚' : myBalance < 0 ? '🔴' : '🎉'}
+          <div style={{ width: 52, height: 52, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26,
+            background: myBal > 0.005 ? 'var(--green-d)' : myBal < -0.005 ? 'var(--red-d)' : 'var(--glass)' }}>
+            {myBal > 0.005 ? '💚' : myBal < -0.005 ? '🔴' : '🎉'}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
-              Your Overall Balance
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 4 }}>Your Net Balance</div>
+            <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-.03em', color: myBal > 0.005 ? 'var(--green)' : myBal < -0.005 ? 'var(--red)' : 'var(--t3)' }}>
+              {myBal > 0.005 ? `+${fmtINR(myBal)}` : myBal < -0.005 ? `-${fmtINR(myBal)}` : 'All settled'}
             </div>
-            <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: '-0.03em', color: myBalance > 0 ? 'var(--primary)' : myBalance < 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-              {myBalance > 0 ? `+${fmt(myBalance)}` : myBalance < 0 ? `-${fmt(myBalance)}` : 'All settled up!'}
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 6 }}>
-              {myBalance > 0 ? `${owedToMe.length} person${owedToMe.length !== 1 ? 's' : ''} owe${owedToMe.length === 1 ? 's' : ''} you money` :
-               myBalance < 0 ? `You owe money to ${myDebts.length} person${myDebts.length !== 1 ? 's' : ''}` :
-               'No outstanding balances — you\'re all good!'}
+            <div style={{ fontSize: 13, color: 'var(--t3)', marginTop: 4 }}>
+              {myBal > 0.005 ? `${owedToMe.length} person${owedToMe.length !== 1 ? 's' : ''} owe${owedToMe.length === 1 ? 's' : ''} you` :
+               myBal < -0.005 ? `You owe ${myDebts.length} person${myDebts.length !== 1 ? 's' : ''}` : 'No outstanding balances'}
             </div>
           </div>
-          {myBalance !== 0 && (
+          {Math.abs(myBal) > 0.005 && (
             <button className="btn btn-primary btn-lg" onClick={() => setShowSettle(true)}>
-              Settle Up →
+              <Scale size={15} /> Settle Up
             </button>
           )}
         </div>
 
-        {/* Stats row */}
-        <div className="stat-grid" style={{ marginBottom: 28 }}>
+        {/* Stats */}
+        <div className="stat-grid">
           <div className="stat-card">
-            <div className="stat-icon">👥</div>
-            <div className="stat-label">Members</div>
-            <div className="stat-value">{balances?.members?.length || 0}</div>
+            <div className="stat-icon-box"><Users size={16} /></div>
+            <div><div className="stat-lbl">Members</div><div className="stat-val">{data?.members?.length || 0}</div></div>
           </div>
-          <div className="stat-card stat-danger">
-            <div className="stat-icon">💸</div>
-            <div className="stat-label">You Owe</div>
-            <div className="stat-value negative">{myBalance < 0 ? fmt(myBalance) : '₹0'}</div>
+          <div className="stat-card red">
+            <div className="stat-icon-box"><Scale size={16} /></div>
+            <div><div className="stat-lbl">You Owe</div><div className="stat-val">{myBal < -0.005 ? fmtINR(myBal) : '₹0'}</div></div>
           </div>
-          <div className="stat-card">
-            <div className="stat-icon">💰</div>
-            <div className="stat-label">Owed to You</div>
-            <div className="stat-value positive">{myBalance > 0 ? fmt(myBalance) : '₹0'}</div>
+          <div className="stat-card green">
+            <div className="stat-icon-box"><CheckCircle size={16} /></div>
+            <div><div className="stat-lbl">Owed to You</div><div className="stat-val">{myBal > 0.005 ? fmtINR(myBal) : '₹0'}</div></div>
           </div>
-          <div className="stat-card stat-info">
-            <div className="stat-icon">🤝</div>
-            <div className="stat-label">Settlements</div>
-            <div className="stat-value">{balances?.settlements?.length || 0}</div>
+          <div className="stat-card cyan">
+            <div className="stat-icon-box"><Clock size={16} /></div>
+            <div><div className="stat-lbl">Settlements</div><div className="stat-val">{data?.settlements?.length || 0}</div></div>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="tabs">
-          <button className={`tab-btn ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>
-            Summary
-          </button>
-          <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>
-            All Balances
-          </button>
-          <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
-            Settlement History
-          </button>
+          <button className={`tab ${tab === 'debts' ? 'on' : ''}`} onClick={() => setTab('debts')}>Simplified Debts ({data?.debts?.length || 0})</button>
+          <button className={`tab ${tab === 'all' ? 'on' : ''}`} onClick={() => setTab('all')}>All Balances</button>
+          <button className={`tab ${tab === 'history' ? 'on' : ''}`} onClick={() => setTab('history')}>History ({data?.settlements?.length || 0})</button>
         </div>
 
-        {/* Summary tab — show who owes whom (simplified) */}
-        {activeTab === 'summary' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {(balances?.debts?.length === 0) ? (
-              <div className="empty-state">
-                <div className="empty-state-icon">🎉</div>
-                <h3>Everyone is settled up!</h3>
-                <p>No outstanding balances in this house.</p>
+        {tab === 'debts' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {!data?.debts?.length ? (
+              <div className="empty">
+                <div className="empty-icon" style={{ background: 'var(--green-d)', borderColor: 'rgba(34,197,94,.2)', color: 'var(--green)' }}><CheckCircle size={24} /></div>
+                <h3>Everyone is settled up!</h3><p>No outstanding debts in this house.</p>
               </div>
-            ) : balances?.debts?.map((debt, i) => {
-              const isMe = debt.from.id === myId || debt.to.id === myId;
+            ) : data.debts.map((d, i) => {
+              const isMine = d.from.id === myId;
               return (
-                <div key={i} className="debt-card" style={{ border: isMe ? '1px solid rgba(16,185,129,0.2)' : '1px solid var(--border)' }}>
-                  {/* From */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className={`avatar ${avatarClass(debt.from.username)}`}>
-                      {initials(debt.from.username)}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>
-                        {debt.from.id === myId ? 'You' : debt.from.username}
-                      </div>
-                      {isMe && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>owes</div>}
-                    </div>
+                <div key={i} className="row-item" style={{ borderColor: isMine ? 'rgba(239,68,68,.25)' : d.to.id === myId ? 'rgba(34,197,94,.25)' : 'var(--stroke)' }}>
+                  <div className={`av ${avColor(d.from.username)}`}>{avInit(d.from.username)}</div>
+                  <div className="row-meta">
+                    <div className="row-name">{d.from.id === myId ? 'You' : d.from.username}</div>
+                    <div className="row-sub">owes</div>
                   </div>
-
-                  {/* Arrow + Amount */}
-                  <div style={{ textAlign: 'center', flex: 1 }}>
-                    <div style={{ fontSize: 20, color: 'var(--text-muted)' }}>→</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: debt.from.id === myId ? 'var(--danger)' : 'var(--primary)' }}>
-                      {fmt(debt.amount)}
-                    </div>
+                  <div style={{ textAlign: 'center', padding: '0 12px' }}>
+                    <div style={{ fontSize: 11, color: 'var(--t4)', marginBottom: 2 }}>→</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: isMine ? 'var(--red)' : 'var(--green)' }}>{fmtINR(d.amount)}</div>
                   </div>
-
-                  {/* To */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexDirection: 'row-reverse', textAlign: 'right' }}>
-                    <div className={`avatar ${avatarClass(debt.to.username)}`}>
-                      {initials(debt.to.username)}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>
-                        {debt.to.id === myId ? 'You' : debt.to.username}
-                      </div>
-                      {isMe && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>receives</div>}
-                    </div>
+                  <div className="row-meta" style={{ textAlign: 'right' }}>
+                    <div className="row-name">{d.to.id === myId ? 'You' : d.to.username}</div>
+                    <div className="row-sub">receives</div>
                   </div>
-
-                  {/* Settle button (only for debtor) */}
-                  {debt.from.id === myId && (
-                    <button
-                      className="btn btn-sm btn-primary"
-                      onClick={() => openSettleWith(debt.to.id, debt.amount)}
-                    >
-                      Pay {fmt(debt.amount)}
-                    </button>
-                  )}
+                  <div className={`av ${avColor(d.to.username)}`}>{avInit(d.to.username)}</div>
+                  {isMine && <button className="btn btn-sm btn-primary" onClick={() => openFor(d.to.id, d.amount)}>Pay {fmtINR(d.amount)}</button>}
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* All Balances tab */}
-        {activeTab === 'all' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {balances?.members?.map(member => {
-              const bal = balances.netBalance[member.id] ?? 0;
+        {tab === 'all' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {data?.members?.map(m => {
+              const bal = data.netBalance[m.id] ?? 0;
               return (
-                <div key={member.id} className="member-card">
-                  <div className={`avatar avatar-md ${avatarClass(member.username)}`}>
-                    {initials(member.username)}
+                <div key={m.id} className="row-item">
+                  <div className={`av av-md ${avColor(m.username)}`}>{avInit(m.username)}</div>
+                  <div className="row-meta">
+                    <div className="row-name">{m.username}{m.id === myId && <span style={{ fontSize: 11, color: 'var(--t4)', marginLeft: 7 }}>you</span>}</div>
+                    <div className="row-sub">{m.role}</div>
                   </div>
-                  <div className="member-info">
-                    <div className="member-name">
-                      {member.username}
-                      {member.id === myId && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>(you)</span>}
+                  <div className="text-right">
+                    <div style={{ fontSize: 14, fontWeight: 800, color: bal > 0.005 ? 'var(--green)' : bal < -0.005 ? 'var(--red)' : 'var(--t4)' }}>
+                      {bal > 0.005 ? `+${fmtINR(bal)}` : bal < -0.005 ? `-${fmtINR(bal)}` : '—'}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{member.role}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--t4)' }}>{bal > 0.005 ? 'owed' : bal < -0.005 ? 'owes' : 'settled'}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className={`member-balance-text ${bal > 0 ? 'balance-positive' : bal < 0 ? 'balance-negative' : 'balance-zero'}`} style={{ fontSize: 16 }}>
-                      {bal > 0 ? `+${fmt(bal)}` : bal < 0 ? `-${fmt(bal)}` : 'Settled'}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {bal > 0 ? 'is owed' : bal < 0 ? 'owes' : ''}
-                    </div>
-                  </div>
-                  {bal < 0 && member.id === myId && (
-                    <button className="btn btn-sm btn-primary" onClick={() => setShowSettle(true)}>
-                      Settle Up
-                    </button>
-                  )}
+                  {bal < -0.005 && m.id === myId && <button className="btn btn-sm btn-primary" onClick={() => setShowSettle(true)}><Scale size={13} /> Settle</button>}
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* Settlement History */}
-        {activeTab === 'history' && (
-          <div>
-            {(balances?.settlements?.length === 0) ? (
-              <div className="empty-state">
-                <div className="empty-state-icon">📋</div>
-                <h3>No settlements yet</h3>
-                <p>When someone settles a debt, it will appear here.</p>
-              </div>
-            ) : (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Amount</th>
-                      <th>Note</th>
-                      <th>Date</th>
+        {tab === 'history' && (
+          !data?.settlements?.length ? (
+            <div className="empty">
+              <div className="empty-icon"><Clock size={22} /></div>
+              <h3>No settlements yet</h3><p>Settled debts will appear here.</p>
+            </div>
+          ) : (
+            <div className="tbl-wrap">
+              <table>
+                <thead><tr><th>Paid By</th><th>Paid To</th><th>Amount</th><th>Note</th><th>Date</th></tr></thead>
+                <tbody>
+                  {data.settlements.map(s => (
+                    <tr key={s.id}>
+                      <td className="fw"><div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><div className={`av av-sm ${avColor(s.paidBy.username)}`}>{avInit(s.paidBy.username)}</div>{s.paidBy.id === myId ? <strong>You</strong> : s.paidBy.username}</div></td>
+                      <td><div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><div className={`av av-sm ${avColor(s.paidTo.username)}`}>{avInit(s.paidTo.username)}</div>{s.paidTo.id === myId ? <strong>You</strong> : s.paidTo.username}</div></td>
+                      <td className="num" style={{ color: 'var(--cyan)' }}>{fmtINR(s.amount)}</td>
+                      <td className="muted">{s.note || '—'}</td>
+                      <td className="muted">{new Date(s.settledAt).toLocaleDateString('en-IN')}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {balances.settlements.map(s => (
-                      <tr key={s.id}>
-                        <td className="td-primary">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div className={`avatar avatar-sm ${avatarClass(s.paidBy.username)}`}>{initials(s.paidBy.username)}</div>
-                            {s.paidBy.id === myId ? <strong>You</strong> : s.paidBy.username}
-                          </div>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div className={`avatar avatar-sm ${avatarClass(s.paidTo.username)}`}>{initials(s.paidTo.username)}</div>
-                            {s.paidTo.id === myId ? <strong>You</strong> : s.paidTo.username}
-                          </div>
-                        </td>
-                        <td className="amount" style={{ color: 'var(--info)' }}>{fmt(s.amount)}</td>
-                        <td>{s.note || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                        <td style={{ color: 'var(--text-muted)' }}>{new Date(s.settledAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </div>
 
-      {/* Settle Up Modal */}
+      {toast.msg && <div className="toast-stack"><div className={`toast toast-${toast.type}`}>{toast.type === 'ok' ? '✓' : '✕'} {toast.msg}</div></div>}
+
       {showSettle && (
-        <div className="modal-overlay" onClick={() => setShowSettle(false)}>
+        <div className="overlay" onClick={() => setShowSettle(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>✅ Record Settlement</h2>
-              <button className="modal-close" onClick={() => setShowSettle(false)}>✕</button>
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
-              Record a payment you made to settle a debt with a housemate.
-            </p>
-            <form onSubmit={handleSettle}>
-              <div className="form-group">
+            <div className="modal-hd"><h2><Scale size={17} style={{ marginRight: 6, verticalAlign: 'middle' }} />Record Settlement</h2><button className="close-btn" onClick={() => setShowSettle(false)}><X /></button></div>
+            <p style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 18 }}>Record a payment you made to a housemate to settle a debt.</p>
+            <form onSubmit={settle}>
+              <div className="field">
                 <label>Paid To</label>
-                <select
-                  value={settleForm.paidTo}
-                  onChange={e => setSettleForm(f => ({ ...f, paidTo: e.target.value }))}
-                  required
-                >
+                <select className="input input-select" value={form.paidTo} onChange={e => setForm(f => ({ ...f, paidTo: e.target.value }))} required>
                   <option value="">Select member…</option>
-                  {balances?.members?.filter(m => m.id !== myId).map(m => (
-                    <option key={m.id} value={m.id}>{m.username}</option>
-                  ))}
+                  {data?.members?.filter(m => m.id !== myId).map(m => <option key={m.id} value={m.id}>{m.username}</option>)}
                 </select>
               </div>
-              <div className="form-group">
+              <div className="field">
                 <label>Amount (₹)</label>
-                <input
-                  type="number" min="0.01" step="0.01"
-                  value={settleForm.amount}
-                  onChange={e => setSettleForm(f => ({ ...f, amount: e.target.value }))}
-                  required placeholder="0.00"
-                />
+                <input className="input" type="number" min=".01" step=".01" placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required />
               </div>
-              <div className="form-group">
-                <label>Note <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
-                <input
-                  type="text"
-                  value={settleForm.note}
-                  onChange={e => setSettleForm(f => ({ ...f, note: e.target.value }))}
-                  placeholder="e.g. Paid via UPI"
-                />
+              <div className="field">
+                <label>Note <span style={{ textTransform: 'none', fontWeight: 400, letterSpacing: 0, color: 'var(--t4)' }}>(optional)</span></label>
+                <input className="input" type="text" placeholder="e.g. Paid via UPI" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
               </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowSettle(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={settling}>
-                  {settling ? 'Recording…' : '✅ Record Settlement'}
-                </button>
+              <div className="modal-ft">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowSettle(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Recording…' : 'Record Settlement'}</button>
               </div>
             </form>
           </div>

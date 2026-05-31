@@ -2,156 +2,123 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { houseService } from '../services/houseService';
-import AppLayout from '../components/AppLayout';
+import AppLayout, { avColor, avInit } from '../components/AppLayout';
+import { Plus, Key, BarChart3, Scale, Copy, Home } from 'lucide-react';
 
-function avatarClass(name) {
-  if (!name) return 'av-a';
-  return 'av-' + name[0].toLowerCase().replace(/[^a-z]/, 'a');
+const BADGE = { owner:'badge-owner', admin:'badge-admin', financier:'badge-financier', member:'badge-member', 'rent payer':'badge-rent_payer' };
+const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+
+function Toast({ msg, type = 'ok' }) {
+  if (!msg) return null;
+  return (
+    <div className="toast-stack">
+      <div className={`toast toast-${type}`}>
+        {type === 'ok' && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
+        {msg}
+      </div>
+    </div>
+  );
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const nav = useNavigate();
   const [houses, setHouses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showJoin, setShowJoin] = useState(false);
+  const [modal, setModal] = useState(null);
   const [houseName, setHouseName] = useState('');
   const [houseKey, setHouseKey] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [toast, setToast] = useState({ msg: '', type: 'ok' });
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => { fetchHouses(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const fetchHouses = async () => {
+  const load = async () => {
     setLoading(true);
-    const result = await houseService.getMyHouses();
-    if (result.success) setHouses(result.data.houses);
+    const r = await houseService.getMyHouses();
+    if (r.success) setHouses(r.data.houses);
     setLoading(false);
   };
 
-  const toast = (msg, isErr = false) => {
-    if (isErr) setError(msg); else setSuccess(msg);
-    setTimeout(() => { setError(''); setSuccess(''); }, 3500);
+  const showToast = (msg, type = 'ok') => { setToast({ msg, type }); setTimeout(() => setToast({ msg: '' }), 3000); };
+
+  const create = async e => {
+    e.preventDefault(); setBusy(true); setErr('');
+    const r = await houseService.createHouse(houseName);
+    if (r.success) { showToast(`House created — key: ${r.data.house.houseKey}`); setHouseName(''); setModal(null); load(); }
+    else setErr(r.error);
+    setBusy(false);
   };
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    const result = await houseService.createHouse(houseName);
-    if (result.success) {
-      toast(`House created! Share key: ${result.data.house.houseKey}`);
-      setHouseName(''); setShowCreate(false); fetchHouses();
-    } else toast(result.error, true);
-    setSaving(false);
+  const join = async e => {
+    e.preventDefault(); setBusy(true); setErr('');
+    const r = await houseService.joinHouse(houseKey);
+    if (r.success) { showToast('Joined house!'); setHouseKey(''); setModal(null); load(); }
+    else setErr(r.error);
+    setBusy(false);
   };
 
-  const handleJoin = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    const result = await houseService.joinHouse(houseKey);
-    if (result.success) {
-      toast('Joined house successfully!');
-      setHouseKey(''); setShowJoin(false); fetchHouses();
-    } else toast(result.error, true);
-    setSaving(false);
-  };
-
-  const copyKey = (e, key) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(key);
-    toast('House key copied!');
-  };
-
-  const greeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+  const copy = (e, key) => { e.stopPropagation(); navigator.clipboard.writeText(key); showToast('Key copied!'); };
 
   return (
     <AppLayout>
-      <div className="page-inner" style={{ animation: 'slideUp 0.3s ease' }}>
+      <div className="page enter">
         {/* Header */}
-        <div className="page-header">
-          <div>
-            <h1>{greeting()}, {user?.username} 👋</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 4 }}>
-              {houses.length === 0 ? 'Create or join a house to get started' : `You're in ${houses.length} house${houses.length > 1 ? 's' : ''}`}
-            </p>
+        <div className="page-hd">
+          <div className="page-hd-left">
+            <h1>{greet()}, {user?.username}</h1>
+            <p>{houses.length === 0 ? 'Create or join a house to get started' : `Managing ${houses.length} house${houses.length !== 1 ? 's' : ''}`}</p>
           </div>
-          <div className="page-header-actions">
-            <button className="btn btn-secondary" onClick={() => { setShowJoin(true); setError(''); }}>
-              🔑 Join House
+          <div className="page-hd-right">
+            <button className="btn btn-ghost" onClick={() => { setModal('join'); setErr(''); }}>
+              <Key size={15} /> Join House
             </button>
-            <button className="btn btn-primary" onClick={() => { setShowCreate(true); setError(''); }}>
-              + Create House
+            <button className="btn btn-primary" onClick={() => { setModal('create'); setErr(''); }}>
+              <Plus size={15} /> New House
             </button>
           </div>
         </div>
 
-        {error && <div className="alert alert-error">{error}</div>}
-        {success && <div className="alert alert-success">{success}</div>}
-
-        {/* Houses */}
+        {/* Grid */}
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-            {[1,2,3].map(i => (
-              <div key={i} className="skeleton" style={{ height: 200, borderRadius: 18 }} />
-            ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(270px,1fr))', gap: 12 }}>
+            {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 188, borderRadius: 18 }} />)}
           </div>
         ) : houses.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">🏡</div>
+          <div className="empty">
+            <div className="empty-icon"><Home size={24} /></div>
             <h3>No houses yet</h3>
-            <p>Create a shared house or join one using a 6-character house key from a housemate.</p>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-              <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Create House</button>
-              <button className="btn btn-secondary" onClick={() => setShowJoin(true)}>🔑 Join with Key</button>
+            <p>Create a shared house or join one using a 6-character key from a housemate.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button className="btn btn-primary" onClick={() => setModal('create')}><Plus size={14} /> Create House</button>
+              <button className="btn btn-ghost" onClick={() => setModal('join')}><Key size={14} /> Join House</button>
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-            {houses.map(house => (
-              <div
-                key={house.id}
-                className="house-card"
-                onClick={() => navigate(`/house/${house.id}`)}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <div className="house-card-icon">🏠</div>
-                  <span className={`badge badge-${house.role.replace(' ', '_')}`}>{house.role}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(270px,1fr))', gap: 12 }}>
+            {houses.map(h => (
+              <div key={h.id} className="house-card" onClick={() => nav(`/house/${h.id}`)}>
+                <div className="hc-glow" />
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div className="hc-icon"><Home size={20} /></div>
+                  <span className={`badge ${BADGE[h.role] || 'badge-member'}`}>{h.role}</span>
                 </div>
-
-                <div className="house-card-name">{house.name}</div>
-
-                <div style={{ marginTop: 6, marginBottom: 16 }}>
-                  <span className="house-card-key">{house.houseKey}</span>
+                <div className="hc-name">{h.name}</div>
+                <div style={{ marginTop: 6 }}>
+                  <span className="hc-key">{h.houseKey}</span>
                 </div>
-
-                <div className="house-card-footer">
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      className="btn btn-xs btn-secondary"
-                      onClick={e => { e.stopPropagation(); navigate(`/house/${house.id}/budget`); }}
-                    >
-                      📊 Budget
+                <div className="hc-footer">
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-xs btn-ghost" onClick={e => { e.stopPropagation(); nav(`/house/${h.id}/budget`); }}>
+                      <BarChart3 size={12} /> Budget
                     </button>
-                    <button
-                      className="btn btn-xs btn-secondary"
-                      onClick={e => { e.stopPropagation(); navigate(`/house/${house.id}/balances`); }}
-                    >
-                      ⚖️ Balances
+                    <button className="btn btn-xs btn-ghost" onClick={e => { e.stopPropagation(); nav(`/house/${h.id}/balances`); }}>
+                      <Scale size={12} /> Balances
                     </button>
                   </div>
-                  <button
-                    className="btn btn-xs btn-ghost"
-                    onClick={e => copyKey(e, house.houseKey)}
-                    title="Copy house key"
-                  >
-                    📋
+                  <button className="btn btn-xs btn-ghost btn-icon-sm" onClick={e => copy(e, h.houseKey)} title="Copy key">
+                    <Copy size={13} />
                   </button>
                 </div>
               </div>
@@ -160,64 +127,53 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Create Modal */}
-      {showCreate && (
-        <div className="modal-overlay" onClick={() => setShowCreate(false)}>
+      <Toast {...toast} />
+
+      {/* Create modal */}
+      {modal === 'create' && (
+        <div className="overlay" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+            <div className="modal-hd">
               <h2>Create New House</h2>
-              <button className="modal-close" onClick={() => setShowCreate(false)}>✕</button>
+              <button className="close-btn" onClick={() => setModal(null)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
-            {error && <div className="alert alert-error">{error}</div>}
-            <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
-              A unique 6-character key will be generated for your housemates to join.
-            </p>
-            <form onSubmit={handleCreate}>
-              <div className="form-group">
+            {err && <div className="alert alert-error">{err}</div>}
+            <p style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 18 }}>A unique 6-character key will be generated automatically for housemates to join.</p>
+            <form onSubmit={create}>
+              <div className="field">
                 <label>House Name</label>
-                <input type="text" value={houseName} onChange={e => setHouseName(e.target.value)} required placeholder="e.g. Greenview Apartment" autoFocus />
+                <input className="input" type="text" placeholder="e.g. Greenview Apartment" required autoFocus value={houseName} onChange={e => setHouseName(e.target.value)} />
               </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Creating…' : '+ Create House'}
-                </button>
+              <div className="modal-ft">
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creating…' : 'Create House'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Join Modal */}
-      {showJoin && (
-        <div className="modal-overlay" onClick={() => setShowJoin(false)}>
+      {/* Join modal */}
+      {modal === 'join' && (
+        <div className="overlay" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+            <div className="modal-hd">
               <h2>Join a House</h2>
-              <button className="modal-close" onClick={() => setShowJoin(false)}>✕</button>
+              <button className="close-btn" onClick={() => setModal(null)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
-            {error && <div className="alert alert-error">{error}</div>}
-            <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
-              Ask your housemate for the 6-character house key.
-            </p>
-            <form onSubmit={handleJoin}>
-              <div className="form-group">
+            {err && <div className="alert alert-error">{err}</div>}
+            <p style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 18 }}>Ask your housemate for the 6-character house key.</p>
+            <form onSubmit={join}>
+              <div className="field">
                 <label>House Key</label>
-                <input
-                  type="text"
-                  value={houseKey}
-                  onChange={e => setHouseKey(e.target.value.toUpperCase())}
-                  required placeholder="AB12C3"
-                  maxLength={6} autoFocus
-                  style={{ fontFamily: 'Courier New, monospace', fontSize: 22, letterSpacing: '0.2em', textAlign: 'center', padding: 16 }}
-                />
-                <span className="form-hint">{houseKey.length}/6 characters</span>
+                <input className="input mono" type="text" placeholder="AB12C3" required maxLength={6} autoFocus
+                  style={{ fontSize: 24, letterSpacing: '0.25em', textAlign: 'center', padding: '14px 16px' }}
+                  value={houseKey} onChange={e => setHouseKey(e.target.value.toUpperCase())} />
+                <span className="hint" style={{ textAlign: 'center' }}>{houseKey.length}/6 characters</span>
               </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowJoin(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving || houseKey.length !== 6}>
-                  {saving ? 'Joining…' : '🔑 Join House'}
-                </button>
+              <div className="modal-ft">
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy || houseKey.length !== 6}>{busy ? 'Joining…' : 'Join House'}</button>
               </div>
             </form>
           </div>

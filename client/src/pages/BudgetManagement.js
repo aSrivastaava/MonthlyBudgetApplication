@@ -8,18 +8,35 @@ import { rentService } from '../services/rentService';
 import { statisticsService } from '../services/statisticsService';
 import { houseService } from '../services/houseService';
 import { bookService } from '../services/bookService';
-import AppLayout from '../components/AppLayout';
+import AppLayout, { avColor, avInit, fmtINR } from '../components/AppLayout';
+import {
+  ChevronLeft, ChevronLeft as PrevM, ChevronRight as NextM,
+  Plus, Trash2, Receipt, BarChart3, Home, TrendingUp, Wallet
+} from 'lucide-react';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const CATEGORIES = ['groceries','wifi','gas','electricity','other'];
-const CAT_ICONS = { groceries:'🛒', wifi:'📶', gas:'⛽', electricity:'⚡', other:'📦', rent:'🏠' };
-const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const CATS = ['groceries','wifi','gas','electricity','other'];
+const CAT_IC = { groceries:'🛒', wifi:'📶', gas:'⛽', electricity:'⚡', other:'📦', rent:'🏠' };
+const CAT_CLR = { groceries:'#4ade80', wifi:'#a5b4fc', gas:'#fcd34d', electricity:'#fdba74', other:'#94a3b8', rent:'#fca5a5' };
+const CHART_COLORS = ['#6366f1','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+
+const X = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+
+const CHART_OPTS = {
+  plugins: { legend: { labels: { color: '#9ba3c4', font: { size: 11 }, padding: 16 } } },
+  scales: {
+    x: { ticks: { color: '#5a6384', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.04)' } },
+    y: { ticks: { color: '#5a6384', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.04)' } }
+  }
+};
+const PIE_OPTS = { plugins: { legend: { labels: { color: '#9ba3c4', font: { size: 11 }, padding: 14 } } } };
 
 export default function BudgetManagement() {
   const { houseId } = useParams();
-  const navigate = useNavigate();
+  const nav = useNavigate();
   const [house, setHouse] = useState(null);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -28,280 +45,331 @@ export default function BudgetManagement() {
   const [stats, setStats] = useState(null);
   const [rent, setRent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('budget');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [tab, setTab] = useState('budget');
+  const [toast, setToast] = useState({ msg: '', type: 'ok' });
 
-  // Modals
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showRentModal, setShowRentModal] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState(null); // 'budget'|'payment'|'rent'
+  const [busy, setBusy] = useState(false);
 
-  // Budget form
-  const [budgetCats, setBudgetCats] = useState(CATEGORIES.map(n => ({ name: n, amount: 0 })));
-
-  // Payment form
+  const [budgetCats, setBudgetCats] = useState(CATS.map(n => ({ name: n, amount: 0 })));
   const [payForm, setPayForm] = useState({ category: '', amount: '', description: '', receipt: null });
   const [payContribs, setPayContribs] = useState([]);
-
-  // Rent form
   const [rentForm, setRentForm] = useState({ totalAmount: '', receipt: null });
   const [rentContribs, setRentContribs] = useState([]);
 
-  const fetchAll = useCallback(async () => {
+  const showToast = (msg, type = 'ok') => { setToast({ msg, type }); setTimeout(() => setToast({ msg: '' }), 3000); };
+
+  const load = useCallback(async () => {
     setLoading(true);
-    const [houseRes, budgetRes, rentRes] = await Promise.all([
+    const [hr, br, rr] = await Promise.all([
       houseService.getHouseDetails(houseId),
       budgetService.getBudget(houseId, year, month),
       rentService.getRentPayment(houseId, year, month),
     ]);
-    if (houseRes.success) {
-      setHouse(houseRes.data.house);
-      // Initialize member contributions
-      const members = houseRes.data.house.members.map(m => ({ userId: m.userId._id, username: m.userId.username, amount: 0 }));
-      setPayContribs(members);
-      setRentContribs(members);
+    if (hr.success) {
+      setHouse(hr.data.house);
+      const mems = hr.data.house.members.map(m => ({ userId: m.id, username: m.username, amount: 0 }));
+      setPayContribs(mems); setRentContribs(mems);
     }
-    if (budgetRes.success) {
-      setBudget(budgetRes.data.budget);
-      // Pre-fill budget form
-      const existing = budgetRes.data.budget.categories;
-      setBudgetCats(CATEGORIES.map(n => ({ name: n, amount: existing.find(c => c.name === n)?.amount || 0 })));
-      // Fetch payments & stats
-      const [payRes, statsRes] = await Promise.all([
-        paymentService.getPaymentsByBudget(houseId, budgetRes.data.budget._id),
+    if (br.success) {
+      setBudget(br.data.budget);
+      const ex = br.data.budget.categories;
+      setBudgetCats(CATS.map(n => ({ name: n, amount: ex.find(c => c.name === n)?.amount || 0 })));
+      const [pr, sr] = await Promise.all([
+        paymentService.getPaymentsByBudget(houseId, br.data.budget._id),
         statisticsService.getStatistics(houseId, year, month),
       ]);
-      if (payRes.success) setPayments(payRes.data.payments);
-      if (statsRes.success) setStats(statsRes.data.statistics);
+      if (pr.success) setPayments(pr.data.payments);
+      if (sr.success) setStats(sr.data.statistics);
     } else {
       setBudget(null); setPayments([]); setStats(null);
-      setBudgetCats(CATEGORIES.map(n => ({ name: n, amount: 0 })));
+      setBudgetCats(CATS.map(n => ({ name: n, amount: 0 })));
     }
-    if (rentRes.success) setRent(rentRes.data.rentPayment);
-    else setRent(null);
+    setRent(rr.success ? rr.data.rentPayment : null);
     setLoading(false);
   }, [houseId, year, month]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  const toast = (msg, isErr = false) => {
-    if (isErr) setError(msg); else setSuccess(msg);
-    setTimeout(() => { setError(''); setSuccess(''); }, 3000);
-  };
+  useEffect(() => { load(); }, [load]);
 
   const prevMonth = () => { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 12) { setMonth(1); setYear(y => y + 1); } else setMonth(m => m + 1); };
 
-  const canManageBudget = house && ['owner','admin','financier'].includes(house.userRole);
-  const canManageRent = house && ['owner','admin','rent payer'].includes(house.userRole);
-
-  const handleSaveBudget = async (e) => {
-    e.preventDefault(); setSaving(true); setError('');
-    const result = await budgetService.createOrUpdateBudget(houseId, { month, year, categories: budgetCats.filter(c => c.amount > 0) });
-    if (result.success) { toast('Budget saved!'); setShowBudgetModal(false); fetchAll(); }
-    else toast(result.error, true);
-    setSaving(false);
+  const saveBudget = async e => {
+    e.preventDefault(); setBusy(true);
+    const cats = budgetCats.filter(c => c.amount > 0);
+    const r = await budgetService.createOrUpdateBudget(houseId, { month, year, categories: cats });
+    if (r.success) { showToast('Budget saved!'); setModal(null); load(); }
+    else showToast(r.error, 'err');
+    setBusy(false);
   };
 
-  const handleAddPayment = async (e) => {
-    e.preventDefault(); setSaving(true); setError('');
-    const contribs = payContribs.filter(c => c.amount > 0).map(c => ({ userId: c.userId, amount: c.amount }));
-    const result = await paymentService.createPayment(houseId, { ...payForm, budgetId: budget._id, contributions: contribs });
-    if (result.success) {
-      toast('Payment added!');
-      setShowPaymentModal(false);
+  const savePayment = async e => {
+    e.preventDefault(); setBusy(true);
+    const contrib = payContribs.filter(c => c.amount > 0);
+    const r = await paymentService.createPayment(houseId, {
+      budgetId: budget._id,
+      category: payForm.category,
+      amount: parseFloat(payForm.amount),
+      description: payForm.description,
+      receipt: payForm.receipt,
+      contributions: contrib.map(c => ({ userId: c.userId, amount: parseFloat(c.amount) })),
+    });
+    if (r.success) {
+      showToast('Payment added!'); setModal(null);
       setPayForm({ category: budget.categories[0]?.name || '', amount: '', description: '', receipt: null });
-      setPayContribs(prev => prev.map(c => ({ ...c, amount: 0 })));
-      fetchAll();
-    } else toast(result.error, true);
-    setSaving(false);
+      setPayContribs(pc => pc.map(c => ({ ...c, amount: 0 })));
+      load();
+    } else showToast(r.error, 'err');
+    setBusy(false);
   };
 
-  const handleDeletePayment = async (paymentId) => {
+  const deletePayment = async id => {
     if (!window.confirm('Delete this payment?')) return;
-    const result = await bookService.deletePayment(houseId, paymentId);
-    if (result.success) { toast('Payment deleted'); fetchAll(); }
-    else toast(result.error, true);
+    const r = await bookService.deletePayment(houseId, id);
+    if (r.success) { showToast('Payment deleted'); load(); }
+    else showToast(r.error, 'err');
   };
 
-  const handleSaveRent = async (e) => {
-    e.preventDefault(); setSaving(true); setError('');
-    const contribs = rentContribs.filter(c => c.amount > 0).map(c => ({ userId: c.userId, amount: c.amount }));
-    const result = await rentService.createOrUpdateRent(houseId, { month, year, ...rentForm, contributions: contribs });
-    if (result.success) { toast('Rent recorded!'); setShowRentModal(false); setRentForm({ totalAmount: '', receipt: null }); fetchAll(); }
-    else toast(result.error, true);
-    setSaving(false);
+  const saveRent = async e => {
+    e.preventDefault(); setBusy(true);
+    const contrib = rentContribs.filter(c => c.amount > 0);
+    const r = await rentService.createRentPayment(houseId, {
+      month, year,
+      totalAmount: parseFloat(rentForm.totalAmount),
+      receipt: rentForm.receipt,
+      contributions: contrib.map(c => ({ userId: c.userId, amount: parseFloat(c.amount) })),
+    });
+    if (r.success) { showToast('Rent saved!'); setModal(null); setRentForm({ totalAmount: '', receipt: null }); setRentContribs(rc => rc.map(c => ({ ...c, amount: 0 }))); load(); }
+    else showToast(r.error, 'err');
+    setBusy(false);
   };
 
-  // Chart data
-  const spendingByCategory = stats ? {
-    labels: Object.keys(stats.categoryStats).map(c => `${CAT_ICONS[c]} ${c}`),
-    datasets: [{ data: Object.values(stats.categoryStats).map(d => d.spent), backgroundColor: COLORS, borderWidth: 0 }]
+  const spendingByCategory = stats?.categoryBreakdown?.length > 0 ? {
+    labels: stats.categoryBreakdown.map(c => c.category),
+    datasets: [{ data: stats.categoryBreakdown.map(c => c.totalSpent), backgroundColor: CHART_COLORS, borderWidth: 0 }]
   } : null;
 
-  const budgetVsSpent = budget ? {
+  const budgetVsSpent = budget?.categories?.length > 0 ? {
     labels: budget.categories.map(c => c.name),
     datasets: [
-      { label: 'Budgeted', data: budget.categories.map(c => c.amount), backgroundColor: 'rgba(99,102,241,0.6)' },
-      { label: 'Spent', data: budget.categories.map(c => stats?.categoryStats[c.name]?.spent || 0), backgroundColor: 'rgba(16,185,129,0.6)' },
+      { label: 'Budget', data: budget.categories.map(c => c.amount), backgroundColor: 'rgba(99,102,241,.5)', borderRadius: 4 },
+      { label: 'Spent', data: budget.categories.map(c => stats?.categoryBreakdown?.find(x => x.category === c.name)?.totalSpent || 0), backgroundColor: 'rgba(239,68,68,.6)', borderRadius: 4 }
     ]
   } : null;
 
-  if (loading) return <AppLayout><div className="loading-screen"><div className="spinner" /></div></AppLayout>;
+  if (loading) return (
+    <AppLayout>
+      <div className="page">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 80, borderRadius: 12 }} />)}
+        </div>
+      </div>
+    </AppLayout>
+  );
+
+  const totalBudget = budget?.categories?.reduce((s, c) => s + c.amount, 0) || 0;
+  const totalSpent = stats?.totalSpent || 0;
+  const pct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
 
   return (
     <AppLayout>
-      <div className="page-inner">
-        <button className="page-back" onClick={() => navigate(`/house/${houseId}`)}>← Back to {house?.name}</button>
+      <div className="page enter">
+        <button className="back-btn" onClick={() => nav(`/house/${houseId}`)}><ChevronLeft size={14} /> House</button>
 
-        {/* Month nav */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-          <h1 style={{ fontSize: 24 }}>Budget Management</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button className="btn btn-secondary btn-sm btn-icon" onClick={prevMonth}>‹</button>
-            <span style={{ fontWeight: 700, fontSize: 16, minWidth: 130, textAlign: 'center' }}>{MONTHS[month-1]} {year}</span>
-            <button className="btn btn-secondary btn-sm btn-icon" onClick={nextMonth}>›</button>
+        {/* Header with month nav */}
+        <div className="page-hd">
+          <div className="page-hd-left">
+            <h1>Budget</h1>
+            <p>{house?.name}</p>
+          </div>
+          <div className="page-hd-right">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--glass)', border: '1px solid var(--stroke)', borderRadius: 10, padding: '4px 6px' }}>
+              <button className="btn btn-xs btn-ghost btn-icon" onClick={prevMonth}><PrevM size={14} /></button>
+              <span style={{ fontSize: 13.5, fontWeight: 700, minWidth: 130, textAlign: 'center', color: 'var(--t1)' }}>{MONTHS[month - 1]} {year}</span>
+              <button className="btn btn-xs btn-ghost btn-icon" onClick={nextMonth}><NextM size={14} /></button>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setModal('budget')}><BarChart3 size={14} /> {budget ? 'Edit Budget' : 'Set Budget'}</button>
+            {budget && <button className="btn btn-primary btn-sm" onClick={() => { setPayForm(f => ({ ...f, category: budget.categories[0]?.name || '' })); setModal('payment'); }}><Plus size={14} /> Add Payment</button>}
           </div>
         </div>
 
-        {error && <div className="alert alert-error">{error}</div>}
-        {success && <div className="alert alert-success">{success}</div>}
+        {/* Stats */}
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-icon-box"><Wallet size={16} /></div>
+            <div>
+              <div className="stat-lbl">Total Budget</div>
+              <div className="stat-val" style={{ color: 'var(--p-1)' }}>{fmtINR(totalBudget)}</div>
+            </div>
+          </div>
+          <div className={`stat-card ${totalSpent > totalBudget ? 'red' : ''}`}>
+            <div className="stat-icon-box" style={totalSpent > totalBudget ? { background: 'var(--red-d)', color: 'var(--red)' } : {}}><TrendingUp size={16} /></div>
+            <div>
+              <div className="stat-lbl">Spent</div>
+              <div className="stat-val" style={{ color: totalSpent > totalBudget ? 'var(--red)' : 'var(--t1)' }}>{fmtINR(totalSpent)}</div>
+            </div>
+          </div>
+          <div className={`stat-card ${totalBudget - totalSpent < 0 ? 'red' : 'green'}`}>
+            <div className="stat-icon-box" style={{ background: totalBudget - totalSpent >= 0 ? 'var(--green-d)' : 'var(--red-d)', color: totalBudget - totalSpent >= 0 ? 'var(--green)' : 'var(--red)' }}><Wallet size={16} /></div>
+            <div>
+              <div className="stat-lbl">Remaining</div>
+              <div className="stat-val" style={{ color: totalBudget - totalSpent >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtINR(Math.abs(totalBudget - totalSpent))}</div>
+              <div className="stat-sub">{totalBudget - totalSpent >= 0 ? 'available' : 'over budget'}</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon-box"><Receipt size={16} /></div>
+            <div>
+              <div className="stat-lbl">Payments</div>
+              <div className="stat-val">{payments.length}</div>
+            </div>
+          </div>
+        </div>
 
-        {/* Stats row */}
-        {stats && (
-          <div className="stat-grid" style={{ marginBottom: 24 }}>
-            <StatCard label="Budgeted" value={`$${stats.totalBudgeted}`} color="var(--primary)" />
-            <StatCard label="Spent" value={`$${stats.totalSpent.toFixed(2)}`} color="var(--danger)" />
-            <StatCard label="Remaining" value={`$${stats.totalRemaining.toFixed(2)}`} color={stats.totalRemaining >= 0 ? 'var(--success)' : 'var(--danger)'} />
-            {rent && <StatCard label="Rent" value={`$${rent.totalAmount}`} color="var(--warning)" />}
+        {/* Overall progress */}
+        {totalBudget > 0 && (
+          <div className="card card-sm" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t2)' }}>Overall spending</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: pct > 100 ? 'var(--red)' : pct > 80 ? 'var(--amber)' : 'var(--green)' }}>{pct.toFixed(0)}%</span>
+            </div>
+            <div className="prog prog-lg">
+              <div className="prog-fill" style={{ width: `${pct}%`, background: pct > 100 ? 'var(--red)' : pct > 80 ? 'var(--amber)' : 'var(--p-grad)' }} />
+            </div>
           </div>
         )}
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: 'var(--surface)', padding: 4, borderRadius: 10, width: 'fit-content' }}>
-          {['budget', 'rent', 'statistics'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, transition: 'all 0.2s', background: activeTab === tab ? 'var(--primary)' : 'transparent', color: activeTab === tab ? '#fff' : 'var(--text-muted)' }}>
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
+        <div className="tabs">
+          <button className={`tab ${tab === 'budget' ? 'on' : ''}`} onClick={() => setTab('budget')}><BarChart3 size={14} /> Budget</button>
+          <button className={`tab ${tab === 'payments' ? 'on' : ''}`} onClick={() => setTab('payments')}><Receipt size={14} /> Payments ({payments.length})</button>
+          <button className={`tab ${tab === 'rent' ? 'on' : ''}`} onClick={() => setTab('rent')}><Home size={14} /> Rent</button>
+          <button className={`tab ${tab === 'stats' ? 'on' : ''}`} onClick={() => setTab('stats')}><TrendingUp size={14} /> Stats</button>
         </div>
 
-        {/* ── Budget Tab ── */}
-        {activeTab === 'budget' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {!budget ? (
-              <div className="card" style={{ textAlign: 'center', padding: 48 }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
-                <h3 style={{ marginBottom: 8 }}>No budget for {MONTHS[month-1]} {year}</h3>
-                <p style={{ color: 'var(--text-muted)', marginBottom: 20, fontSize: 14 }}>Set a budget to start tracking expenses</p>
-                {canManageBudget && <button className="btn btn-primary" onClick={() => setShowBudgetModal(true)}>Create Budget</button>}
-              </div>
-            ) : (
-              <>
-                {/* Budget categories */}
-                <div className="card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                    <h2 style={{ fontSize: 18 }}>Budget Categories</h2>
-                    {canManageBudget && (
-                      <div style={{ display: 'flex', gap: 10 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setShowBudgetModal(true)}>Edit Budget</button>
-                        <button className="btn btn-primary btn-sm" onClick={() => { setPayForm(f => ({ ...f, category: budget.categories[0]?.name || 'groceries' })); setShowPaymentModal(true); }}>+ Add Payment</button>
+        {/* BUDGET TAB */}
+        {tab === 'budget' && (
+          !budget ? (
+            <div className="empty">
+              <div className="empty-icon"><Wallet size={22} /></div>
+              <h3>No budget for {MO[month-1]} {year}</h3>
+              <p>Set a monthly budget to start tracking expenses by category.</p>
+              <button className="btn btn-primary" onClick={() => setModal('budget')}><Plus size={14} /> Set Budget</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {budget.categories.map(cat => {
+                const spent = stats?.categoryBreakdown?.find(c => c.category === cat.name)?.totalSpent || 0;
+                const p = (spent / cat.amount) * 100;
+                return (
+                  <div key={cat.name} className="card card-sm">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, background: `${CAT_CLR[cat.name]}18`, flexShrink: 0 }}>
+                        {CAT_IC[cat.name]}
                       </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {budget.categories.map(cat => {
-                      const spent = stats?.categoryStats[cat.name]?.spent || 0;
-                      const pct = Math.min((spent / cat.amount) * 100, 100);
-                      const over = spent > cat.amount;
-                      return (
-                        <div key={cat.name}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 14, fontWeight: 500 }}>{CAT_ICONS[cat.name]} {cat.name}</span>
-                            <span style={{ fontSize: 13, color: over ? 'var(--danger)' : 'var(--text-secondary)' }}>
-                              ${spent.toFixed(2)} <span style={{ color: 'var(--text-muted)' }}>/ ${cat.amount}</span>
-                            </span>
-                          </div>
-                          <div className="progress">
-                            <div className="progress-fill" style={{ width: `${pct}%`, background: over ? 'var(--danger)' : pct > 80 ? 'var(--warning)' : 'var(--primary)' }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t1)', textTransform: 'capitalize' }}>{cat.name}</span>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: 13.5, fontWeight: 700, color: p > 100 ? 'var(--red)' : 'var(--t1)' }}>{fmtINR(spent)}</span>
+                            <span style={{ fontSize: 12, color: 'var(--t3)', marginLeft: 4 }}>/ {fmtINR(cat.amount)}</span>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Payments list */}
-                <div className="card">
-                  <h2 style={{ fontSize: 18, marginBottom: 20 }}>Payments <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>({payments.length})</span></h2>
-                  {payments.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)' }}>No payments recorded yet.</div>
-                  ) : (
-                    <div className="table-wrap">
-                      <table>
-                        <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>By</th><th></th></tr></thead>
-                        <tbody>
-                          {payments.map(p => (
-                            <tr key={p._id}>
-                              <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{new Date(p.paymentDate).toLocaleDateString()}</td>
-                              <td><span className={`cat-pill cat-${p.category}`}>{CAT_ICONS[p.category]} {p.category}</span></td>
-                              <td>{p.description || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                              <td style={{ fontWeight: 700, color: 'var(--text)' }}>${p.amount.toFixed(2)}</td>
-                              <td style={{ fontSize: 12 }}>{p.createdBy?.username}</td>
-                              <td>
-                                <div style={{ display: 'flex', gap: 6 }}>
-                                  {p.receiptUrl && <a href={p.receiptUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm btn-icon" title="View receipt">📎</a>}
-                                  {canManageBudget && <button className="btn btn-danger btn-sm btn-icon" onClick={() => handleDeletePayment(p._id)} title="Delete">✕</button>}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                        <div className="prog">
+                          <div className="prog-fill" style={{ width: `${Math.min(p, 100)}%`, background: p > 100 ? 'var(--red)' : p > 80 ? 'var(--amber)' : CAT_CLR[cat.name] }} />
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
         )}
 
-        {/* ── Rent Tab ── */}
-        {activeTab === 'rent' && (
+        {/* PAYMENTS TAB */}
+        {tab === 'payments' && (
+          payments.length === 0 ? (
+            <div className="empty">
+              <div className="empty-icon"><Receipt size={22} /></div>
+              <h3>No payments yet</h3>
+              <p>{budget ? 'Add your first payment to start tracking expenses.' : 'Set a budget first, then add payments.'}</p>
+              {budget && <button className="btn btn-primary" onClick={() => { setPayForm(f => ({ ...f, category: budget.categories[0]?.name || '' })); setModal('payment'); }}><Plus size={14} /> Add Payment</button>}
+            </div>
+          ) : (
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Contributions</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {payments.map(p => (
+                    <tr key={p._id}>
+                      <td className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{new Date(p.paymentDate).toLocaleDateString('en-IN')}</td>
+                      <td><span className={`cat cat-${p.category}`}>{CAT_IC[p.category]} {p.category}</span></td>
+                      <td className="fw">{p.description || <span style={{ color: 'var(--t4)' }}>—</span>}</td>
+                      <td className="num">{fmtINR(p.amount)}</td>
+                      <td>
+                        {p.contributions?.length > 0 ? (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {p.contributions.map((c, i) => (
+                              <span key={i} style={{ fontSize: 10.5, background: 'var(--p-dim)', color: 'var(--p-1)', padding: '2px 7px', borderRadius: 99, border: '1px solid rgba(99,102,241,.2)' }}>
+                                {c.userId?.username || '?'}: {fmtINR(c.amount)}
+                              </span>
+                            ))}
+                          </div>
+                        ) : <span className="muted" style={{ fontSize: 12 }}>—</span>}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          {p.receiptUrl && <a href={p.receiptUrl} target="_blank" rel="noreferrer" className="btn btn-xs btn-ghost btn-icon" title="Receipt"><Receipt size={12} /></a>}
+                          <button className="btn btn-xs btn-danger btn-icon" onClick={() => deletePayment(p._id)} title="Delete"><Trash2 size={12} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+
+        {/* RENT TAB */}
+        {tab === 'rent' && (
           <div>
             {!rent ? (
-              <div className="card" style={{ textAlign: 'center', padding: 48 }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🏠</div>
-                <h3 style={{ marginBottom: 8 }}>No rent recorded for {MONTHS[month-1]} {year}</h3>
-                {canManageRent && <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setShowRentModal(true)}>Record Rent Payment</button>}
+              <div className="empty">
+                <div className="empty-icon"><Home size={22} /></div>
+                <h3>No rent for {MO[month-1]} {year}</h3>
+                <p>Record the rent payment for this month.</p>
+                <button className="btn btn-primary" onClick={() => setModal('rent')}><Plus size={14} /> Record Rent</button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
-                      <h2 style={{ fontSize: 18 }}>Rent Payment</h2>
-                      <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Recorded by {rent.createdBy?.username} · {new Date(rent.paymentDate).toLocaleDateString()}</p>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 3 }}>Total Rent</div>
+                      <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-.03em', color: 'var(--red)' }}>{fmtINR(rent.totalAmount)}</div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--warning)' }}>${rent.totalAmount}</div>
-                      {canManageRent && <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setShowRentModal(true)}>Update</button>}
+                    <div style={{ fontSize: 13, color: 'var(--t3)' }}>
+                      {MO[rent.month - 1]} {rent.year}
                     </div>
                   </div>
-                  {rent.receiptUrl && <a href={rent.receiptUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">📎 View Receipt</a>}
+                  {rent.receiptUrl && <a href={rent.receiptUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm"><Receipt size={13} /> View Receipt</a>}
                 </div>
-
-                {rent.contributions.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                {rent.contributions?.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                     <div className="card">
-                      <h3 style={{ fontSize: 16, marginBottom: 16 }}>Contribution Breakdown</h3>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 14 }}>Contributions</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {rent.contributions.map((c, i) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--surface)', borderRadius: 8 }}>
-                            <span style={{ fontSize: 14 }}>{c.userId.username}</span>
-                            <span style={{ fontWeight: 700, color: 'var(--warning)' }}>${c.amount}</span>
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', background: 'var(--base-2)', borderRadius: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div className={`av av-sm ${avColor(c.userId?.username)}`}>{avInit(c.userId?.username)}</div>
+                              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--t1)' }}>{c.userId?.username || '?'}</span>
+                            </div>
+                            <span style={{ fontWeight: 700, color: 'var(--red)' }}>{fmtINR(c.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -309,9 +377,9 @@ export default function BudgetManagement() {
                     <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <div style={{ width: '100%', maxWidth: 200 }}>
                         <Pie data={{
-                          labels: rent.contributions.map(c => c.userId.username),
-                          datasets: [{ data: rent.contributions.map(c => c.amount), backgroundColor: COLORS, borderWidth: 0 }]
-                        }} options={{ plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } } }} />
+                          labels: rent.contributions.map(c => c.userId?.username || '?'),
+                          datasets: [{ data: rent.contributions.map(c => c.amount), backgroundColor: CHART_COLORS, borderWidth: 0 }]
+                        }} options={PIE_OPTS} />
                       </div>
                     </div>
                   </div>
@@ -321,190 +389,176 @@ export default function BudgetManagement() {
           </div>
         )}
 
-        {/* ── Statistics Tab ── */}
-        {activeTab === 'statistics' && (
-          <div>
-            {!stats ? (
-              <div className="card" style={{ textAlign: 'center', padding: 48 }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📈</div>
-                <h3>No statistics yet</h3>
-                <p style={{ color: 'var(--text-muted)', marginTop: 8, fontSize: 14 }}>Create a budget and add payments to see analytics</p>
+        {/* STATS TAB */}
+        {tab === 'stats' && (
+          !stats ? (
+            <div className="empty">
+              <div className="empty-icon"><TrendingUp size={22} /></div>
+              <h3>No statistics yet</h3>
+              <p>Create a budget and add payments to see analytics.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {spendingByCategory && (
+                  <div className="card"><div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 16 }}>Spending by Category</div><div style={{ maxWidth: 220, margin: '0 auto' }}><Pie data={spendingByCategory} options={PIE_OPTS} /></div></div>
+                )}
+                {budgetVsSpent && (
+                  <div className="card"><div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 16 }}>Budget vs Spent</div><Bar data={budgetVsSpent} options={CHART_OPTS} /></div>
+                )}
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {/* Charts */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                  {spendingByCategory && (
-                    <div className="card">
-                      <h3 style={{ fontSize: 16, marginBottom: 16 }}>Spending by Category</h3>
-                      <div style={{ maxWidth: 220, margin: '0 auto' }}>
-                        <Pie data={spendingByCategory} options={{ plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } } }} />
-                      </div>
-                    </div>
-                  )}
-                  {budgetVsSpent && (
-                    <div className="card">
-                      <h3 style={{ fontSize: 16, marginBottom: 16 }}>Budget vs Spent</h3>
-                      <Bar data={budgetVsSpent} options={{
-                        responsive: true,
-                        plugins: { legend: { labels: { color: '#94a3b8' } } },
-                        scales: { x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } } }
-                      }} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Member contributions */}
-                <div className="card">
-                  <h3 style={{ fontSize: 16, marginBottom: 16 }}>Member Contributions</h3>
-                  <div className="table-wrap">
-                    <table>
-                      <thead><tr><th>Member</th><th>Contributed</th><th>Fair Share</th><th>Balance</th></tr></thead>
-                      <tbody>
-                        {stats.memberContributions.map(m => (
-                          <tr key={m.userId}>
-                            <td style={{ fontWeight: 600 }}>{m.username}</td>
-                            <td>${m.totalContributed.toFixed(2)}</td>
-                            <td>${m.totalSpent.toFixed(2)}</td>
-                            <td style={{ fontWeight: 700, color: m.balance >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                              {m.balance >= 0 ? '+' : ''}${m.balance.toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+              <div className="card">
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 14 }}>Member Contributions</div>
+                <div className="tbl-wrap" style={{ border: 'none' }}>
+                  <table>
+                    <thead><tr><th>Member</th><th>Contributed</th><th>Fair Share</th><th>Balance</th></tr></thead>
+                    <tbody>
+                      {stats.memberContributions.map(m => (
+                        <tr key={m.userId}>
+                          <td className="fw">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div className={`av av-sm ${avColor(m.username)}`}>{avInit(m.username)}</div>
+                              {m.username}
+                            </div>
+                          </td>
+                          <td className="num">{fmtINR(m.totalContributed)}</td>
+                          <td className="muted">{fmtINR(m.totalSpent)}</td>
+                          <td className="fw" style={{ color: m.balance >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>
+                            {m.balance >= 0 ? '+' : ''}{fmtINR(m.balance)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )
         )}
       </div>
 
-      {/* Budget Modal */}
-      {showBudgetModal && (
-        <div className="modal-overlay" onClick={() => setShowBudgetModal(false)}>
+      {toast.msg && <div className="toast-stack"><div className={`toast toast-${toast.type}`}>{toast.type === 'ok' ? '✓' : '✕'} {toast.msg}</div></div>}
+
+      {/* BUDGET MODAL */}
+      {modal === 'budget' && (
+        <div className="overlay" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>{budget ? 'Update' : 'Create'} Budget — {MONTHS[month-1]} {year}</h2>
-            {error && <div className="alert alert-error">{error}</div>}
-            <form onSubmit={handleSaveBudget}>
-              {budgetCats.map((cat, i) => (
-                <div className="form-group" key={cat.name}>
-                  <label>{CAT_ICONS[cat.name]} {cat.name}</label>
-                  <input type="number" value={cat.amount} min="0" step="0.01" placeholder="0.00"
-                    onChange={e => setBudgetCats(prev => prev.map((c, j) => j === i ? { ...c, amount: parseFloat(e.target.value) || 0 } : c))} />
-                </div>
-              ))}
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowBudgetModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Budget'}</button>
+            <div className="modal-hd"><h2>{budget ? 'Edit Budget' : 'Set Budget'} — {MO[month-1]} {year}</h2><button className="close-btn" onClick={() => setModal(null)}><X /></button></div>
+            <form onSubmit={saveBudget}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 4 }}>
+                {budgetCats.map((cat, i) => (
+                  <div key={cat.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--base-2)', borderRadius: 8, border: '1px solid var(--stroke)' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, background: `${CAT_CLR[cat.name]}18`, flexShrink: 0 }}>{CAT_IC[cat.name]}</div>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--t1)', flex: 1, textTransform: 'capitalize' }}>{cat.name}</span>
+                    <input className="input" type="number" min="0" step="0.01" placeholder="0"
+                      value={cat.amount || ''}
+                      onChange={e => setBudgetCats(bc => bc.map((c, j) => j === i ? { ...c, amount: parseFloat(e.target.value) || 0 } : c))}
+                      style={{ width: 110, textAlign: 'right' }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: '10px 0 4px', fontSize: 13, color: 'var(--t3)', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Total budget</span>
+                <strong style={{ color: 'var(--t1)' }}>{fmtINR(budgetCats.reduce((s, c) => s + (c.amount || 0), 0))}</strong>
+              </div>
+              <div className="modal-ft">
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save Budget'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Payment Modal */}
-      {showPaymentModal && (
-        <div className="modal-overlay" onClick={() => setShowPaymentModal(false)}>
+      {/* PAYMENT MODAL */}
+      {modal === 'payment' && budget && (
+        <div className="overlay" onClick={() => setModal(null)}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-            <h2>Add Payment</h2>
-            {error && <div className="alert alert-error">{error}</div>}
-            <form onSubmit={handleAddPayment}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div className="form-group">
+            <div className="modal-hd"><h2>Add Payment</h2><button className="close-btn" onClick={() => setModal(null)}><X /></button></div>
+            <form onSubmit={savePayment}>
+              <div className="form-row">
+                <div className="field">
                   <label>Category</label>
-                  <select value={payForm.category} onChange={e => setPayForm(f => ({ ...f, category: e.target.value }))}>
-                    {budget.categories.map(c => <option key={c.name} value={c.name}>{CAT_ICONS[c.name]} {c.name}</option>)}
+                  <select className="input input-select" value={payForm.category} onChange={e => setPayForm(f => ({ ...f, category: e.target.value }))} required>
+                    {budget.categories.map(c => <option key={c.name} value={c.name}>{CAT_IC[c.name]} {c.name}</option>)}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label>Total Amount ($)</label>
-                  <input type="number" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} required min="0" step="0.01" placeholder="0.00" />
+                <div className="field">
+                  <label>Amount (₹)</label>
+                  <input className="input" type="number" min=".01" step=".01" placeholder="0.00" required value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} />
                 </div>
               </div>
-              <div className="form-group">
-                <label>Description (optional)</label>
-                <input type="text" value={payForm.description} onChange={e => setPayForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Weekly groceries from Walmart" />
+              <div className="field">
+                <label>Description <span style={{ textTransform: 'none', fontWeight: 400, letterSpacing: 0, color: 'var(--t4)' }}>(optional)</span></label>
+                <input className="input" type="text" placeholder="What was this for?" value={payForm.description} onChange={e => setPayForm(f => ({ ...f, description: e.target.value }))} />
               </div>
-              <div className="form-group">
-                <label>Receipt (optional)</label>
-                <input type="file" accept="image/*,application/pdf" onChange={e => setPayForm(f => ({ ...f, receipt: e.target.files[0] }))} />
+              <div className="field">
+                <label>Receipt <span style={{ textTransform: 'none', fontWeight: 400, letterSpacing: 0, color: 'var(--t4)' }}>(optional)</span></label>
+                <input className="input" type="file" accept="image/*,.pdf" onChange={e => setPayForm(f => ({ ...f, receipt: e.target.files[0] }))} />
               </div>
-
-              {/* Member contributions */}
               {payContribs.length > 0 && (
-                <div style={{ margin: '8px 0 16px' }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Member Contributions (optional)</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {payContribs.map((c, i) => (
-                      <div key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--primary-light)', flexShrink: 0 }}>{c.username[0].toUpperCase()}</div>
-                        <span style={{ fontSize: 13, flex: 1 }}>{c.username}</span>
-                        <input type="number" value={c.amount || ''} onChange={e => setPayContribs(prev => prev.map((m, j) => j === i ? { ...m, amount: parseFloat(e.target.value) || 0 } : m))} min="0" step="0.01" placeholder="0.00" style={{ width: 100, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 10px', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }} />
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 10 }}>Member Contributions (optional)</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {payContribs.map((m, i) => (
+                      <div key={m.userId} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className={`av av-sm ${avColor(m.username)}`}>{avInit(m.username)}</div>
+                        <span style={{ fontSize: 13, flex: 1, color: 'var(--t2)' }}>{m.username}</span>
+                        <input className="input" type="number" min="0" step=".01" placeholder="0.00"
+                          value={m.amount || ''} style={{ width: 100 }}
+                          onChange={e => setPayContribs(pc => pc.map((c, j) => j === i ? { ...c, amount: e.target.value } : c))} />
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowPaymentModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Adding…' : 'Add Payment'}</button>
+              <div className="modal-ft">
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Adding…' : 'Add Payment'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Rent Modal */}
-      {showRentModal && (
-        <div className="modal-overlay" onClick={() => setShowRentModal(false)}>
-          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-            <h2>{rent ? 'Update' : 'Record'} Rent — {MONTHS[month-1]} {year}</h2>
-            {error && <div className="alert alert-error">{error}</div>}
-            <form onSubmit={handleSaveRent}>
-              <div className="form-group">
-                <label>Total Rent Amount ($)</label>
-                <input type="number" value={rentForm.totalAmount} onChange={e => setRentForm(f => ({ ...f, totalAmount: e.target.value }))} required min="0" step="0.01" placeholder="0.00" />
+      {/* RENT MODAL */}
+      {modal === 'rent' && (
+        <div className="overlay" onClick={() => setModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-hd"><h2>Record Rent — {MO[month-1]} {year}</h2><button className="close-btn" onClick={() => setModal(null)}><X /></button></div>
+            <form onSubmit={saveRent}>
+              <div className="field">
+                <label>Total Rent (₹)</label>
+                <input className="input" type="number" min=".01" step=".01" placeholder="0.00" required value={rentForm.totalAmount} onChange={e => setRentForm(f => ({ ...f, totalAmount: e.target.value }))} />
               </div>
-              <div className="form-group">
-                <label>Receipt (optional)</label>
-                <input type="file" accept="image/*,application/pdf" onChange={e => setRentForm(f => ({ ...f, receipt: e.target.files[0] }))} />
+              <div className="field">
+                <label>Receipt <span style={{ textTransform: 'none', fontWeight: 400, letterSpacing: 0, color: 'var(--t4)' }}>(optional)</span></label>
+                <input className="input" type="file" accept="image/*,.pdf" onChange={e => setRentForm(f => ({ ...f, receipt: e.target.files[0] }))} />
               </div>
-
               {rentContribs.length > 0 && (
-                <div style={{ margin: '8px 0 16px' }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Member Contributions (optional)</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {rentContribs.map((c, i) => (
-                      <div key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--warning-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--warning)', flexShrink: 0 }}>{c.username[0].toUpperCase()}</div>
-                        <span style={{ fontSize: 13, flex: 1 }}>{c.username}</span>
-                        <input type="number" value={c.amount || ''} onChange={e => setRentContribs(prev => prev.map((m, j) => j === i ? { ...m, amount: parseFloat(e.target.value) || 0 } : m))} min="0" step="0.01" placeholder="0.00" style={{ width: 100, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 10px', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }} />
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 10 }}>Member Contributions (optional)</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {rentContribs.map((m, i) => (
+                      <div key={m.userId} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className={`av av-sm ${avColor(m.username)}`}>{avInit(m.username)}</div>
+                        <span style={{ fontSize: 13, flex: 1, color: 'var(--t2)' }}>{m.username}</span>
+                        <input className="input" type="number" min="0" step=".01" placeholder="0.00"
+                          value={m.amount || ''} style={{ width: 100 }}
+                          onChange={e => setRentContribs(rc => rc.map((c, j) => j === i ? { ...c, amount: e.target.value } : c))} />
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowRentModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Rent'}</button>
+              <div className="modal-ft">
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save Rent'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
     </AppLayout>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div className="stat-card">
-      <div className="stat-label">{label}</div>
-      <div className="stat-value" style={{ color }}>{value}</div>
-    </div>
   );
 }

@@ -2,10 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { houseService } from '../services/houseService';
+import {
+  LayoutDashboard, Users, BarChart3, Scale, BookOpen,
+  LogOut, Home
+} from 'lucide-react';
 
-function avatarClass(name) {
-  if (!name) return 'av-a';
-  return 'av-' + name[0].toLowerCase().replace(/[^a-z]/, 'a');
+export function avColor(name) {
+  if (!name) return 'avc-0';
+  const n = name.charCodeAt(0) % 10;
+  return `avc-${n}`;
+}
+export function avInit(name) { return name ? name[0].toUpperCase() : '?'; }
+export function fmtINR(n) {
+  return '₹' + Math.abs(Number(n)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function AppLayout({ children }) {
@@ -13,118 +22,90 @@ export default function AppLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Extract houseId from URL
   const houseMatch = location.pathname.match(/\/house\/([a-f0-9]{24})/i);
   const houseId = houseMatch ? houseMatch[1] : null;
-
   const [houseName, setHouseName] = useState('');
 
   useEffect(() => {
-    if (houseId) {
-      houseService.getHouseDetails(houseId).then(r => {
-        if (r.success) setHouseName(r.data.house.name);
-      });
-    } else {
-      setHouseName('');
-    }
+    if (!houseId) { setHouseName(''); return; }
+    houseService.getHouseDetails(houseId).then(r => {
+      if (r.success) setHouseName(r.data.house.name);
+    });
   }, [houseId]);
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const at = path => location.pathname === path;
 
-  const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
-
-  const initials = user?.username ? user.username[0].toUpperCase() : '?';
+  const NavBtn = ({ icon, label, path, exact = true }) => {
+    const active = exact ? at(path) : location.pathname.startsWith(path);
+    return (
+      <button className={`nav-btn ${active ? 'active' : ''}`} onClick={() => navigate(path)}>
+        <span className="nav-ic">{icon}</span>
+        <span>{label}</span>
+      </button>
+    );
+  };
 
   return (
-    <div className="app-layout">
+    <div className="shell">
       <aside className="sidebar">
-        {/* Brand */}
-        <div className="sidebar-brand" style={{ cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
-          <div className="sidebar-brand-icon">
-            <img src="/logo192.png" alt="SplitNest" />
-          </div>
-          <div>
-            <div className="sidebar-brand-text">SplitNest</div>
-            <div className="sidebar-brand-sub">Split bills. Not friendships.</div>
+        <div className="sidebar-stripe" />
+
+        {/* Centered brand */}
+        <div className="sidebar-brand" onClick={() => navigate('/dashboard')} style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+          <img
+            src="/logo192.png"
+            alt="SplitNest"
+            style={{ width:80, height:80, objectFit:'contain', display:'block', margin:'0 auto' }}
+          />
+          <div style={{ marginTop: 2 }}>
+            <div className="brand-name">SplitNest</div>
+            <div className="brand-tagline">Split bills. Not friendships.</div>
           </div>
         </div>
 
-        <div className="sidebar-scroll">
-          {/* Main navigation */}
-          <div className="sidebar-section">
-            <span className="sidebar-section-label">Navigation</span>
-            <button
-              className={`sidebar-link ${location.pathname === '/dashboard' ? 'active' : ''}`}
-              onClick={() => navigate('/dashboard')}
-            >
-              <span className="sidebar-link-icon">🏠</span>
-              Dashboard
-            </button>
+        {/* Navigation */}
+        <nav className="sidebar-nav">
+          <div className="nav-group">
+            <span className="nav-group-label">Menu</span>
+            <NavBtn icon={<LayoutDashboard size={15} />} label="Dashboard" path="/dashboard" />
           </div>
 
-          {/* House-specific nav */}
           {houseId && (
-            <div className="sidebar-section">
+            <div className="nav-group">
               {houseName && (
-                <div className="sidebar-house-pill">
-                  <div className="sidebar-house-pill-name">🏡 {houseName}</div>
-                  <div className="sidebar-house-pill-sub">Current house</div>
+                <div className="house-chip">
+                  <div className="house-chip-name">
+                    <Home size={11} /> {houseName}
+                  </div>
+                  <div className="house-chip-sub">Current house</div>
                 </div>
               )}
-              <span className="sidebar-section-label">House</span>
-              <button
-                className={`sidebar-link ${location.pathname === `/house/${houseId}` ? 'active' : ''}`}
-                onClick={() => navigate(`/house/${houseId}`)}
-              >
-                <span className="sidebar-link-icon">👥</span>
-                Members
-              </button>
-              <button
-                className={`sidebar-link ${location.pathname === `/house/${houseId}/budget` ? 'active' : ''}`}
-                onClick={() => navigate(`/house/${houseId}/budget`)}
-              >
-                <span className="sidebar-link-icon">📊</span>
-                Budget
-              </button>
-              <button
-                className={`sidebar-link ${location.pathname === `/house/${houseId}/balances` ? 'active' : ''}`}
-                onClick={() => navigate(`/house/${houseId}/balances`)}
-              >
-                <span className="sidebar-link-icon">⚖️</span>
-                Balances
-              </button>
-              <button
-                className={`sidebar-link ${location.pathname === `/house/${houseId}/book` ? 'active' : ''}`}
-                onClick={() => navigate(`/house/${houseId}/book`)}
-              >
-                <span className="sidebar-link-icon">📖</span>
-                Expense Book
-              </button>
+              <span className="nav-group-label">House</span>
+              <NavBtn icon={<Users size={15} />} label="Members" path={`/house/${houseId}`} />
+              <NavBtn icon={<BarChart3 size={15} />} label="Budget" path={`/house/${houseId}/budget`} />
+              <NavBtn icon={<Scale size={15} />} label="Balances" path={`/house/${houseId}/balances`} />
+              <NavBtn icon={<BookOpen size={15} />} label="Expense Book" path={`/house/${houseId}/book`} />
             </div>
           )}
-        </div>
+        </nav>
 
-        {/* User + logout */}
-        <div className="sidebar-bottom">
-          <div className="sidebar-user">
-            <div className={`avatar avatar-sm ${avatarClass(user?.username)}`}>
-              {initials}
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div className="sidebar-user-name truncate">{user?.username}</div>
-              <div className="sidebar-user-email truncate">{user?.email}</div>
+        {/* User footer */}
+        <div className="sidebar-ft">
+          <div className="user-row">
+            <div className={`av av-sm ${avColor(user?.username)}`}>{avInit(user?.username)}</div>
+            <div className="user-info">
+              <div className="user-name">{user?.username}</div>
+              <div className="user-email">{user?.email}</div>
             </div>
           </div>
-          <button className="sidebar-link btn-ghost" onClick={handleLogout} style={{ width: '100%', color: 'var(--text-muted)' }}>
-            <span className="sidebar-link-icon">🚪</span>
-            Sign Out
+          <button className="nav-btn" onClick={() => { logout(); navigate('/login'); }} style={{ color: 'var(--t4)' }}>
+            <span className="nav-ic"><LogOut size={14} /></span>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
-      <main className="main-content">
-        {children}
-      </main>
+      <main className="main">{children}</main>
     </div>
   );
 }

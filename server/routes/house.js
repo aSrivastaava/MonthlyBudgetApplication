@@ -150,7 +150,13 @@ router.get('/:houseId', auth, async (req, res) => {
         name: house.name,
         houseKey: house.houseKey,
         owner: house.owner,
-        members: house.members,
+        members: house.members.map(m => ({
+          id: m.userId._id,
+          username: m.userId.username,
+          email: m.userId.email,
+          role: m.role,
+          joinedAt: m.joinedAt
+        })),
         userRole: userMembership.role
       }
     });

@@ -9,36 +9,29 @@ import BudgetManagement from './pages/BudgetManagement';
 import BookPage from './pages/BookPage';
 import BalancePage from './pages/BalancePage';
 
-const PrivateRoute = ({ children }) => {
+const Guard = ({ pub, children }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
+  if (pub) return user ? <Navigate to="/dashboard" /> : children;
   return user ? children : <Navigate to="/login" />;
 };
 
-const PublicRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
-  return !user ? children : <Navigate to="/dashboard" />;
-};
-
-function App() {
+export default function App() {
   return (
     <Router>
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" />} />
-          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="/house/:houseId" element={<PrivateRoute><HouseDetails /></PrivateRoute>} />
-          <Route path="/house/:houseId/budget" element={<PrivateRoute><BudgetManagement /></PrivateRoute>} />
-          <Route path="/house/:houseId/balances" element={<PrivateRoute><BalancePage /></PrivateRoute>} />
-          <Route path="/house/:houseId/book" element={<PrivateRoute><BookPage /></PrivateRoute>} />
+          <Route path="/login"    element={<Guard pub><Login /></Guard>} />
+          <Route path="/register" element={<Guard pub><Register /></Guard>} />
+          <Route path="/dashboard"              element={<Guard><Dashboard /></Guard>} />
+          <Route path="/house/:houseId"         element={<Guard><HouseDetails /></Guard>} />
+          <Route path="/house/:houseId/budget"  element={<Guard><BudgetManagement /></Guard>} />
+          <Route path="/house/:houseId/balances"element={<Guard><BalancePage /></Guard>} />
+          <Route path="/house/:houseId/book"    element={<Guard><BookPage /></Guard>} />
           <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
       </AuthProvider>
     </Router>
   );
 }
-
-export default App;
