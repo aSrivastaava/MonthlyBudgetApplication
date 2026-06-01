@@ -1,29 +1,29 @@
-version: '3.8'
-
 services:
   mongodb:
-    image: mongo:latest
-    container_name: monthlybudget_mongodb
-    restart: always
-    ports:
-      - "27017:27017"
+    image: mongo:7
+    container_name: budget_mongodb
+    restart: unless-stopped
     volumes:
-      - mongodb_data:/data/db
+      - budget_mongodb:/data/db
     environment:
-      - MONGO_INITDB_DATABASE=monthlybudget
+      MONGO_INITDB_DATABASE: monthlybudget
 
-  backend:
+  app:
     build: .
-    container_name: monthlybudget_backend
-    restart: always
+    container_name: budget_app
+    restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "4040:5000"
     depends_on:
       - mongodb
     environment:
-      - MONGODB_URI=mongodb://mongodb:27017/monthlybudget
-      - JWT_SECRET=${JWT_SECRET:-change_this_secret_in_production}
-      - PORT=5000
+      MONGODB_URI: mongodb://mongodb:27017/monthlybudget
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 5000
+      NODE_ENV: production
+    volumes:
+      - budget_uploads:/app/uploads
 
 volumes:
-  mongodb_data:
+  budget_mongodb:
+  budget_uploads:
